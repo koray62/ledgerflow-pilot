@@ -7,7 +7,9 @@ import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import JournalEntryForm from "@/components/dashboard/JournalEntryForm";
+import OCRUpload from "./OCRUpload";
 
 const statusColors: Record<string, string> = {
   posted: "bg-success/10 text-success",
@@ -75,71 +77,86 @@ const JournalEntries = () => {
           <h1 className="text-2xl font-bold text-foreground">Journal Entries</h1>
           <p className="text-sm text-muted-foreground">Double-entry bookkeeping records</p>
         </div>
-        <Button variant="hero" size="sm" className="gap-2" onClick={() => setFormOpen(true)}>
-          <Plus className="h-4 w-4" /> New Entry
-        </Button>
       </div>
 
       <JournalEntryForm open={formOpen} onOpenChange={setFormOpen} />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search journal entries..."
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+      <Tabs defaultValue="manual" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="manual">Manual Entry</TabsTrigger>
+          <TabsTrigger value="ocr">OCR Upload</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="manual">
+          <div className="mb-4 flex justify-end">
+            <Button variant="hero" size="sm" className="gap-2" onClick={() => setFormOpen(true)}>
+              <Plus className="h-4 w-4" /> New Entry
+            </Button>
           </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
-            </div>
-          ) : filtered.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              {search ? "No entries match your search." : "No journal entries yet. Create your first entry to get started."}
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="pb-3 text-left text-xs font-medium text-muted-foreground">ID</th>
-                    <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Date</th>
-                    <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Description</th>
-                    <th className="pb-3 text-right text-xs font-medium text-muted-foreground">Debit</th>
-                    <th className="pb-3 text-right text-xs font-medium text-muted-foreground">Credit</th>
-                    <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((entry) => {
-                    const totals = entryTotals[entry.id] ?? { debit: 0, credit: 0 };
-                    return (
-                      <tr key={entry.id} className="border-b border-border/50 transition-colors hover:bg-muted/50 cursor-pointer">
-                        <td className="py-3 font-mono text-sm text-accent">{entry.entry_number}</td>
-                        <td className="py-3 font-mono text-sm text-muted-foreground">{entry.entry_date}</td>
-                        <td className="py-3 text-sm font-medium text-foreground">{entry.description}</td>
-                        <td className="py-3 text-right font-mono text-sm text-foreground">{fmt(totals.debit)}</td>
-                        <td className="py-3 text-right font-mono text-sm text-foreground">{fmt(totals.credit)}</td>
-                        <td className="py-3">
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusColors[entry.status] ?? ""}`}>
-                            {entry.status}
-                          </span>
-                        </td>
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search journal entries..."
+                  className="pl-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
+                </div>
+              ) : filtered.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  {search ? "No entries match your search." : "No journal entries yet. Create your first entry to get started."}
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="pb-3 text-left text-xs font-medium text-muted-foreground">ID</th>
+                        <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Date</th>
+                        <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Description</th>
+                        <th className="pb-3 text-right text-xs font-medium text-muted-foreground">Debit</th>
+                        <th className="pb-3 text-right text-xs font-medium text-muted-foreground">Credit</th>
+                        <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Status</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    </thead>
+                    <tbody>
+                      {filtered.map((entry) => {
+                        const totals = entryTotals[entry.id] ?? { debit: 0, credit: 0 };
+                        return (
+                          <tr key={entry.id} className="border-b border-border/50 transition-colors hover:bg-muted/50 cursor-pointer">
+                            <td className="py-3 font-mono text-sm text-accent">{entry.entry_number}</td>
+                            <td className="py-3 font-mono text-sm text-muted-foreground">{entry.entry_date}</td>
+                            <td className="py-3 text-sm font-medium text-foreground">{entry.description}</td>
+                            <td className="py-3 text-right font-mono text-sm text-foreground">{fmt(totals.debit)}</td>
+                            <td className="py-3 text-right font-mono text-sm text-foreground">{fmt(totals.credit)}</td>
+                            <td className="py-3">
+                              <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusColors[entry.status] ?? ""}`}>
+                                {entry.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="ocr">
+          <OCRUpload />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

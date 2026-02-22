@@ -14,7 +14,7 @@ import DashboardOverview from "./pages/dashboard/DashboardOverview";
 import ChartOfAccounts from "./pages/dashboard/ChartOfAccounts";
 import JournalEntries from "./pages/dashboard/JournalEntries";
 import CashFlow from "./pages/dashboard/CashFlow";
-import OCRUpload from "./pages/dashboard/OCRUpload";
+
 import DashboardSettings from "./pages/dashboard/DashboardSettings";
 import PlaceholderPage from "./components/dashboard/PlaceholderPage";
 
@@ -36,7 +36,7 @@ const App = () => (
               <Route path="accounts" element={<ChartOfAccounts />} />
               <Route path="journal" element={<JournalEntries />} />
               <Route path="cashflow" element={<CashFlow />} />
-              <Route path="ocr" element={<OCRUpload />} />
+              
               <Route path="settings" element={<DashboardSettings />} />
               <Route path="banks" element={<PlaceholderPage title="Bank Accounts" description="Manage connected bank accounts and transactions" />} />
               <Route path="invoices" element={<PlaceholderPage title="Invoices & Bills" description="Track accounts receivable and payable" />} />

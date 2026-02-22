@@ -261,11 +261,7 @@ const OCRUpload = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   return (
-    <div className="p-6 lg:p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">OCR Document Scanner</h1>
-        <p className="text-sm text-muted-foreground">Upload invoices and receipts for AI-powered data extraction</p>
-      </div>
+    <div>
 
       {/* Upload area */}
       <Card className="mb-6">
