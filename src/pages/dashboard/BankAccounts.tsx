@@ -55,6 +55,40 @@ interface AISuggestion {
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 
+const DATE_FORMATS = [
+  { value: "yyyy-mm-dd", label: "YYYY-MM-DD (2026-02-22)" },
+  { value: "dd/mm/yyyy", label: "DD/MM/YYYY (22/02/2026)" },
+  { value: "mm/dd/yyyy", label: "MM/DD/YYYY (02/22/2026)" },
+  { value: "dd-mm-yyyy", label: "DD-MM-YYYY (22-02-2026)" },
+  { value: "mm-dd-yyyy", label: "MM-DD-YYYY (02-22-2026)" },
+  { value: "dd.mm.yyyy", label: "DD.MM.YYYY (22.02.2026)" },
+] as const;
+
+function convertDate(raw: string, format: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return new Date().toISOString().slice(0, 10);
+  let d: number, m: number, y: number;
+  const parts = trimmed.split(/[\/\-\.]/);
+  if (parts.length < 3) return trimmed; // fallback
+  switch (format) {
+    case "dd/mm/yyyy":
+    case "dd-mm-yyyy":
+    case "dd.mm.yyyy":
+      [d, m, y] = parts.map(Number);
+      break;
+    case "mm/dd/yyyy":
+    case "mm-dd-yyyy":
+      [m, d, y] = parts.map(Number);
+      break;
+    case "yyyy-mm-dd":
+    default:
+      [y, m, d] = parts.map(Number);
+      break;
+  }
+  if (y < 100) y += 2000;
+  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
 function parseCSV(text: string): { headers: string[]; rows: string[][] } {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (!lines.length) return { headers: [], rows: [] };
@@ -108,6 +142,7 @@ export default function BankAccounts() {
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<string[][]>([]);
   const [colMap, setColMap] = useState<{ dateIdx: number; descIdx: number; amtIdx: number; debitIdx: number; creditIdx: number }>({ dateIdx: -1, descIdx: -1, amtIdx: -1, debitIdx: -1, creditIdx: -1 });
+  const [dateFormat, setDateFormat] = useState("yyyy-mm-dd");
   const [parsedTxs, setParsedTxs] = useState<ParsedTx[]>([]);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
@@ -191,21 +226,22 @@ export default function BankAccounts() {
       setSuggestions([]);
       setParsedTxs([]);
 
-      // auto-parse if columns detected
-      if (detected.dateIdx >= 0 && detected.descIdx >= 0 && (detected.amtIdx >= 0 || (detected.debitIdx >= 0 && detected.creditIdx >= 0))) {
-        const txs = rows.map((r) => {
-          let amount = 0;
-          if (detected.amtIdx >= 0) {
-            amount = parseFloat(r[detected.amtIdx]?.replace(/[^0-9.\-]/g, "") || "0");
-          } else {
-            const dr = parseFloat(r[detected.debitIdx]?.replace(/[^0-9.\-]/g, "") || "0");
-            const cr = parseFloat(r[detected.creditIdx]?.replace(/[^0-9.\-]/g, "") || "0");
-            amount = cr - dr;
-          }
-          return { date: r[detected.dateIdx] || "", description: r[detected.descIdx] || "", amount };
-        }).filter((t) => t.description || t.amount);
-        setParsedTxs(txs);
+      // Auto-detect date format from first data row
+      if (detected.dateIdx >= 0 && rows.length > 0) {
+        const sample = (rows[0][detected.dateIdx] || "").trim();
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(sample)) {
+          const p = sample.split("/").map(Number);
+          setDateFormat(p[0] > 12 ? "dd/mm/yyyy" : p[1] > 12 ? "mm/dd/yyyy" : "dd/mm/yyyy");
+        } else if (/^\d{2}-\d{2}-\d{4}$/.test(sample)) {
+          const p = sample.split("-").map(Number);
+          setDateFormat(p[0] > 12 ? "dd-mm-yyyy" : p[1] > 12 ? "mm-dd-yyyy" : "dd-mm-yyyy");
+        } else if (/^\d{2}\.\d{2}\.\d{4}$/.test(sample)) {
+          setDateFormat("dd.mm.yyyy");
+        } else {
+          setDateFormat("yyyy-mm-dd");
+        }
       }
+      // Don't auto-parse — always show column mapping so user can confirm date format
     };
     reader.readAsText(file);
   };
@@ -220,7 +256,7 @@ export default function BankAccounts() {
         const cr = parseFloat(r[colMap.creditIdx]?.replace(/[^0-9.\-]/g, "") || "0");
         amount = cr - dr;
       }
-      return { date: r[colMap.dateIdx] || "", description: r[colMap.descIdx] || "", amount };
+      return { date: convertDate(r[colMap.dateIdx] || "", dateFormat), description: r[colMap.descIdx] || "", amount };
     }).filter((t) => t.description || t.amount);
     setParsedTxs(txs);
   };
@@ -440,9 +476,16 @@ export default function BankAccounts() {
                 {csvHeaders.length > 0 && !parsedTxs.length && (
                   <div className="space-y-3 border border-border rounded-lg p-4">
                     <p className="font-medium">Map CSV Columns</p>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <Label>Date Column</Label>
+                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                       <div>
+                         <Label>Date Format</Label>
+                         <Select value={dateFormat} onValueChange={setDateFormat}>
+                           <SelectTrigger><SelectValue /></SelectTrigger>
+                           <SelectContent>{DATE_FORMATS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
+                         </Select>
+                       </div>
+                       <div>
+                         <Label>Date Column</Label>
                         <Select value={String(colMap.dateIdx)} onValueChange={(v) => setColMap({ ...colMap, dateIdx: Number(v) })}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>{csvHeaders.map((h, i) => <SelectItem key={i} value={String(i)}>{h}</SelectItem>)}</SelectContent>
