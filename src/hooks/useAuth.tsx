@@ -6,8 +6,9 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, firstName: string, lastName: string, companyName: string) => Promise<{ error: Error | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, firstName: string, lastName: string, companyName: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string) => Promise<{ error: Error | null }>;
+  verifyOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -34,24 +35,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, firstName: string, lastName: string, companyName: string) => {
+  const signUp = useCallback(async (email: string, firstName: string, lastName: string, companyName: string) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
+      // Store signup metadata in localStorage so we can create tenant after OTP verification
+      localStorage.setItem("pending_signup", JSON.stringify({ firstName, lastName, companyName }));
+
+      const { error } = await supabase.auth.signInWithOtp({
         email,
-        password,
         options: {
-          emailRedirectTo: window.location.origin,
           data: { first_name: firstName, last_name: lastName },
         },
       });
       if (error) return { error };
+      return { error: null };
+    } catch (err) {
+      return { error: err as Error };
+    }
+  }, []);
 
-      // After signup, create tenant and assign owner role via edge function
-      if (data.user) {
+  const signIn = useCallback(async (email: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithOtp({ email });
+      return { error: error as Error | null };
+    } catch (err) {
+      return { error: err as Error };
+    }
+  }, []);
+
+  const verifyOtp = useCallback(async (email: string, token: string) => {
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: "email",
+      });
+      if (error) return { error };
+
+      // Check if there's pending signup data (first-time user)
+      const pendingRaw = localStorage.getItem("pending_signup");
+      if (pendingRaw && data.user) {
+        const pending = JSON.parse(pendingRaw);
         const { error: tenantError } = await supabase.functions.invoke("create-tenant", {
-          body: { companyName, userId: data.user.id },
+          body: { companyName: pending.companyName, userId: data.user.id },
         });
         if (tenantError) console.error("Tenant creation error:", tenantError);
+        localStorage.removeItem("pending_signup");
       }
 
       return { error: null };
@@ -60,17 +88,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
-  }, []);
-
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, verifyOtp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

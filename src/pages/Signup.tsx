@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BookOpen } from "lucide-react";
+import { BookOpen, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -13,51 +14,89 @@ const Signup = () => {
   const [lastName, setLastName] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<"form" | "otp">("form");
   const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const { signUp } = useAuth();
+  const { signUp, verifyOtp } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password || !firstName.trim() || !companyName.trim()) return;
-
-    if (password.length < 6) {
-      toast({ title: "Password too short", description: "Minimum 6 characters required", variant: "destructive" });
-      return;
-    }
+    if (!email.trim() || !firstName.trim() || !companyName.trim()) return;
 
     setLoading(true);
-    const { error } = await signUp(email.trim(), password, firstName.trim(), lastName.trim(), companyName.trim());
+    const { error } = await signUp(email.trim(), firstName.trim(), lastName.trim(), companyName.trim());
     setLoading(false);
 
     if (error) {
       toast({ title: "Sign up failed", description: error.message, variant: "destructive" });
     } else {
-      setSubmitted(true);
+      setStep("otp");
+      toast({ title: "Code sent", description: `We sent a 6-digit code to ${email}` });
     }
   };
 
-  if (submitted) {
+  const handleVerify = async () => {
+    if (otp.length !== 6) return;
+
+    setLoading(true);
+    const { error } = await verifyOtp(email.trim(), otp);
+    setLoading(false);
+
+    if (error) {
+      toast({ title: "Verification failed", description: error.message, variant: "destructive" });
+      setOtp("");
+    } else {
+      navigate("/dashboard");
+    }
+  };
+
+  if (step === "otp") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="w-full max-w-sm text-center">
-          <div className="mb-6 flex justify-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
+        <div className="w-full max-w-sm">
+          <div className="mb-8 flex flex-col items-center">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
               <BookOpen className="h-6 w-6 text-accent" />
             </div>
+            <h1 className="text-lg font-semibold text-foreground">Enter verification code</h1>
+            <p className="mt-1 text-sm text-muted-foreground text-center">
+              We sent a 6-digit code to <strong className="text-foreground">{email}</strong>
+            </p>
           </div>
-          <h1 className="text-lg font-semibold text-foreground">Check your email</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            We sent a verification link to <strong className="text-foreground">{email}</strong>. Click the link to activate your account.
-          </p>
-          <Link to="/login">
-            <Button variant="outline" className="mt-6">
-              Back to Sign In
-            </Button>
-          </Link>
+
+          <Card>
+            <CardContent className="p-6 flex flex-col items-center gap-6">
+              <InputOTP maxLength={6} value={otp} onChange={setOtp}>
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSlot index={2} />
+                  <InputOTPSlot index={3} />
+                  <InputOTPSlot index={4} />
+                  <InputOTPSlot index={5} />
+                </InputOTPGroup>
+              </InputOTP>
+
+              <Button
+                variant="hero"
+                className="w-full"
+                disabled={otp.length !== 6 || loading}
+                onClick={handleVerify}
+              >
+                {loading ? "Verifying..." : "Verify & Create Account"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <button
+            onClick={() => { setStep("form"); setOtp(""); }}
+            className="mt-4 flex items-center gap-1 mx-auto text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back
+          </button>
         </div>
       </div>
     );
@@ -98,15 +137,11 @@ const Signup = () => {
                 <Label htmlFor="email" className="text-xs">Work Email</Label>
                 <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@acme.com" className="mt-1" required autoComplete="email" />
               </div>
-              <div>
-                <Label htmlFor="password" className="text-xs">Password</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="mt-1" required minLength={6} autoComplete="new-password" />
-              </div>
               <Button type="submit" variant="hero" className="w-full" disabled={loading}>
-                {loading ? "Creating account..." : "Create Account"}
+                {loading ? "Sending code..." : "Continue with Email"}
               </Button>
               <p className="text-center text-xs text-muted-foreground">
-                By signing up, you agree to our Terms of Service
+                We'll send a 6-digit verification code to your email
               </p>
             </form>
           </CardContent>
