@@ -1,25 +1,72 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from "react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-
-const entries = [
-  { id: "JE-1284", date: "2026-02-20", description: "Office Rent - February", debit: "$3,200.00", credit: "$3,200.00", status: "Posted" },
-  { id: "JE-1283", date: "2026-02-19", description: "Invoice #1042 - Acme Corp", debit: "$8,500.00", credit: "$8,500.00", status: "Posted" },
-  { id: "JE-1282", date: "2026-02-18", description: "Software Subscriptions", debit: "$299.00", credit: "$299.00", status: "Posted" },
-  { id: "JE-1281", date: "2026-02-17", description: "Consulting Revenue - Q1", debit: "$12,000.00", credit: "$12,000.00", status: "Draft" },
-  { id: "JE-1280", date: "2026-02-16", description: "Payroll - Feb 2026", debit: "$24,500.00", credit: "$24,500.00", status: "Posted" },
-  { id: "JE-1279", date: "2026-02-15", description: "Equipment Purchase", debit: "$5,400.00", credit: "$5,400.00", status: "Pending" },
-  { id: "JE-1278", date: "2026-02-14", description: "Utility Bill - Electric", debit: "$420.00", credit: "$420.00", status: "Posted" },
-];
+import { useTenant } from "@/hooks/useTenant";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const statusColors: Record<string, string> = {
-  Posted: "bg-success/10 text-success",
-  Draft: "bg-muted text-muted-foreground",
-  Pending: "bg-warning/10 text-warning",
+  posted: "bg-success/10 text-success",
+  draft: "bg-muted text-muted-foreground",
+  pending: "bg-warning/10 text-warning",
+  voided: "bg-destructive/10 text-destructive",
 };
 
 const JournalEntries = () => {
+  const { tenantId } = useTenant();
+  const [search, setSearch] = useState("");
+
+  const { data: entries = [], isLoading } = useQuery({
+    queryKey: ["journal-entries", tenantId],
+    enabled: !!tenantId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("journal_entries")
+        .select("id, entry_number, entry_date, description, status")
+        .eq("tenant_id", tenantId!)
+        .order("entry_date", { ascending: false })
+        .limit(50);
+      return data ?? [];
+    },
+  });
+
+  // Get line totals for displayed entries
+  const entryIds = entries.map((e) => e.id);
+  const { data: lineTotals = [] } = useQuery({
+    queryKey: ["journal-line-totals", tenantId, entryIds],
+    enabled: !!tenantId && entryIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("journal_lines")
+        .select("journal_entry_id, debit, credit")
+        .eq("tenant_id", tenantId!)
+        .in("journal_entry_id", entryIds);
+      return data ?? [];
+    },
+  });
+
+  // Aggregate debits/credits per entry
+  const entryTotals = entryIds.reduce<Record<string, { debit: number; credit: number }>>((acc, id) => {
+    const lines = lineTotals.filter((l) => l.journal_entry_id === id);
+    acc[id] = {
+      debit: lines.reduce((s, l) => s + Number(l.debit), 0),
+      credit: lines.reduce((s, l) => s + Number(l.credit), 0),
+    };
+    return acc;
+  }, {});
+
+  const filtered = entries.filter(
+    (e) =>
+      e.description.toLowerCase().includes(search.toLowerCase()) ||
+      e.entry_number.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const fmt = (n: number) =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-6 flex items-center justify-between">
@@ -36,40 +83,58 @@ const JournalEntries = () => {
         <CardHeader className="pb-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search journal entries..." className="pl-9" />
+            <Input
+              placeholder="Search journal entries..."
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="pb-3 text-left text-xs font-medium text-muted-foreground">ID</th>
-                  <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Date</th>
-                  <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Description</th>
-                  <th className="pb-3 text-right text-xs font-medium text-muted-foreground">Debit</th>
-                  <th className="pb-3 text-right text-xs font-medium text-muted-foreground">Credit</th>
-                  <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((entry, i) => (
-                  <tr key={i} className="border-b border-border/50 transition-colors hover:bg-muted/50 cursor-pointer">
-                    <td className="py-3 font-mono text-sm text-accent">{entry.id}</td>
-                    <td className="py-3 font-mono text-sm text-muted-foreground">{entry.date}</td>
-                    <td className="py-3 text-sm font-medium text-foreground">{entry.description}</td>
-                    <td className="py-3 text-right font-mono text-sm text-foreground">{entry.debit}</td>
-                    <td className="py-3 text-right font-mono text-sm text-foreground">{entry.credit}</td>
-                    <td className="py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[entry.status]}`}>
-                        {entry.status}
-                      </span>
-                    </td>
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {search ? "No entries match your search." : "No journal entries yet. Create your first entry to get started."}
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="pb-3 text-left text-xs font-medium text-muted-foreground">ID</th>
+                    <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Date</th>
+                    <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Description</th>
+                    <th className="pb-3 text-right text-xs font-medium text-muted-foreground">Debit</th>
+                    <th className="pb-3 text-right text-xs font-medium text-muted-foreground">Credit</th>
+                    <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filtered.map((entry) => {
+                    const totals = entryTotals[entry.id] ?? { debit: 0, credit: 0 };
+                    return (
+                      <tr key={entry.id} className="border-b border-border/50 transition-colors hover:bg-muted/50 cursor-pointer">
+                        <td className="py-3 font-mono text-sm text-accent">{entry.entry_number}</td>
+                        <td className="py-3 font-mono text-sm text-muted-foreground">{entry.entry_date}</td>
+                        <td className="py-3 text-sm font-medium text-foreground">{entry.description}</td>
+                        <td className="py-3 text-right font-mono text-sm text-foreground">{fmt(totals.debit)}</td>
+                        <td className="py-3 text-right font-mono text-sm text-foreground">{fmt(totals.credit)}</td>
+                        <td className="py-3">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusColors[entry.status] ?? ""}`}>
+                            {entry.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
