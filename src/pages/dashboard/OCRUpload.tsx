@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Upload, FileText, CheckCircle, Clock, AlertCircle, XCircle, Eye, Loader2, BookOpen } from "lucide-react";
+import { Upload, FileText, CheckCircle, Clock, AlertCircle, XCircle, Eye, Loader2, BookOpen, Camera } from "lucide-react";
 import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +26,7 @@ const OCRUpload = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [creatingJE, setCreatingJE] = useState<string | null>(null);
@@ -283,6 +284,14 @@ const OCRUpload = () => {
               multiple
               onChange={(e) => handleFiles(e.target.files)}
             />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              className="hidden"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => handleFiles(e.target.files)}
+            />
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
               {uploading ? (
                 <Loader2 className="h-6 w-6 text-accent animate-spin" />
@@ -294,9 +303,24 @@ const OCRUpload = () => {
               {uploading ? "Uploading..." : "Drop files here or click to upload"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">PDF, JPG, PNG up to 10MB</p>
-            <Button variant="outline" size="sm" className="mt-4" disabled={uploading}>
-              Select Files
-            </Button>
+            <div className="mt-4 flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled={uploading}>
+                Select Files
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={uploading}
+                className="gap-1.5"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cameraInputRef.current?.click();
+                }}
+              >
+                <Camera className="h-4 w-4" />
+                Scan
+              </Button>
+            </div>
           </div>
           <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
             <span>{docsThisMonth} scans this month</span>
