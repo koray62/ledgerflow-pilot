@@ -433,7 +433,7 @@ export default function BankAccounts() {
                 <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
                   <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground mb-2">Upload a CSV bank statement</p>
-                  <Input type="file" accept=".csv" onChange={handleFileUpload} className="max-w-xs mx-auto" />
+                  <Input type="file" accept=".csv,text/csv,application/csv,application/vnd.ms-excel" onChange={handleFileUpload} className="max-w-xs mx-auto" />
                 </div>
 
                 {/* Column mapping */}
