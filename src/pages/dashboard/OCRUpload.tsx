@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Upload, FileText, CheckCircle, Clock, AlertCircle, XCircle, Eye, Loader2, BookOpen, Camera, X } from "lucide-react";
+import { Upload, FileText, CheckCircle, Clock, AlertCircle, XCircle, Eye, Loader2, BookOpen, Camera, X, Pencil } from "lucide-react";
 import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,7 +22,11 @@ const statusConfig: Record<string, { icon: typeof CheckCircle; colorClass: strin
 const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
-const OCRUpload = () => {
+interface OCRUploadProps {
+  onEditEntry?: (entryId: string) => void;
+}
+
+const OCRUpload = ({ onEditEntry }: OCRUploadProps) => {
   const { tenantId } = useTenant();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -551,10 +555,23 @@ const OCRUpload = () => {
                         )}
 
                         {doc.journal_entry_id && (
-                          <p className="text-xs text-success flex items-center gap-1">
-                            <CheckCircle className="h-3.5 w-3.5" />
-                            Journal entry created
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-success flex items-center gap-1">
+                              <CheckCircle className="h-3.5 w-3.5" />
+                              Journal entry created
+                            </p>
+                            {onEditEntry && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 text-xs h-7"
+                                onClick={(e) => { e.stopPropagation(); onEditEntry(doc.journal_entry_id!); }}
+                              >
+                                <Pencil className="h-3 w-3" />
+                                Edit Entry
+                              </Button>
+                            )}
+                          </div>
                         )}
 
                         {doc.processing_time_ms && (

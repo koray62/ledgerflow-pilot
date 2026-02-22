@@ -22,6 +22,7 @@ const JournalEntries = () => {
   const { tenantId } = useTenant();
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [editEntryId, setEditEntryId] = useState<string | null>(null);
   const { data: entries = [], isLoading } = useQuery({
     queryKey: ["journal-entries", tenantId],
     enabled: !!tenantId,
@@ -79,7 +80,14 @@ const JournalEntries = () => {
         </div>
       </div>
 
-      <JournalEntryForm open={formOpen} onOpenChange={setFormOpen} />
+      <JournalEntryForm
+        open={formOpen}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setEditEntryId(null);
+        }}
+        editEntryId={editEntryId}
+      />
 
       <Tabs defaultValue="manual" className="space-y-4">
         <TabsList>
@@ -89,7 +97,7 @@ const JournalEntries = () => {
 
         <TabsContent value="manual">
           <div className="mb-4 flex justify-end">
-            <Button variant="hero" size="sm" className="gap-2" onClick={() => setFormOpen(true)}>
+            <Button variant="hero" size="sm" className="gap-2" onClick={() => { setEditEntryId(null); setFormOpen(true); }}>
               <Plus className="h-4 w-4" /> New Entry
             </Button>
           </div>
@@ -131,7 +139,7 @@ const JournalEntries = () => {
                       {filtered.map((entry) => {
                         const totals = entryTotals[entry.id] ?? { debit: 0, credit: 0 };
                         return (
-                          <tr key={entry.id} className="border-b border-border/50 transition-colors hover:bg-muted/50 cursor-pointer">
+                          <tr key={entry.id} className="border-b border-border/50 transition-colors hover:bg-muted/50 cursor-pointer" onClick={() => { setEditEntryId(entry.id); setFormOpen(true); }}>
                             <td className="py-3 font-mono text-sm text-accent">{entry.entry_number}</td>
                             <td className="py-3 font-mono text-sm text-muted-foreground">{entry.entry_date}</td>
                             <td className="py-3 text-sm font-medium text-foreground">{entry.description}</td>
@@ -154,7 +162,7 @@ const JournalEntries = () => {
         </TabsContent>
 
         <TabsContent value="ocr">
-          <OCRUpload />
+          <OCRUpload onEditEntry={(id) => { setEditEntryId(id); setFormOpen(true); }} />
         </TabsContent>
       </Tabs>
     </div>
