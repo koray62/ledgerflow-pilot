@@ -42,6 +42,8 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [description, setDescription] = useState("");
   const [memo, setMemo] = useState("");
+  const [contactType, setContactType] = useState<"none" | "vendor" | "customer">("none");
+  const [contactId, setContactId] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceInterval, setRecurrenceInterval] = useState("monthly");
   const [lines, setLines] = useState<JournalLine[]>([emptyLine(), emptyLine()]);
@@ -63,6 +65,38 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
         .is("deleted_at", null)
         .eq("is_active", true)
         .order("code");
+      return data ?? [];
+    },
+  });
+
+  // Fetch vendors
+  const { data: vendors = [] } = useQuery({
+    queryKey: ["vendors-list", tenantId],
+    enabled: !!tenantId && open,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("vendors")
+        .select("id, name")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null)
+        .eq("is_active", true)
+        .order("name");
+      return data ?? [];
+    },
+  });
+
+  // Fetch customers
+  const { data: customers = [] } = useQuery({
+    queryKey: ["customers-list", tenantId],
+    enabled: !!tenantId && open,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("customers")
+        .select("id, name")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null)
+        .eq("is_active", true)
+        .order("name");
       return data ?? [];
     },
   });
@@ -124,6 +158,8 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
     if (open && !editEntryId) {
       setDescription("");
       setMemo("");
+      setContactType("none");
+      setContactId("");
       setIsRecurring(false);
       setRecurrenceInterval("monthly");
       setEntryDate(new Date().toISOString().split("T")[0]);
@@ -352,6 +388,43 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
                   maxLength={200}
                 />
               </div>
+            </div>
+
+            {/* Vendor / Customer selector */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Contact Type</Label>
+                <Select value={contactType} onValueChange={(v: "none" | "vendor" | "customer") => { setContactType(v); setContactId(""); }}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="vendor">Vendor</SelectItem>
+                    <SelectItem value="customer">Customer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {contactType !== "none" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">
+                    {contactType === "vendor" ? "Vendor" : "Customer"}
+                  </Label>
+                  <Select value={contactId} onValueChange={setContactId}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder={`Select ${contactType}`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(contactType === "vendor" ? vendors : customers).map((c) => (
+                        <SelectItem key={c.id} value={c.id} className="text-sm">{c.name}</SelectItem>
+                      ))}
+                      {(contactType === "vendor" ? vendors : customers).length === 0 && (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground">No {contactType}s found</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="je-memo" className="text-xs text-muted-foreground">Memo</Label>
