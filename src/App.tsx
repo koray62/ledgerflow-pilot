@@ -17,6 +17,7 @@ import CashFlow from "./pages/dashboard/CashFlow";
 import Contacts from "./pages/dashboard/Contacts";
 import DashboardSettings from "./pages/dashboard/DashboardSettings";
 import PlaceholderPage from "./components/dashboard/PlaceholderPage";
+import BankAccounts from "./pages/dashboard/BankAccounts";
 
 const queryClient = new QueryClient();
 
@@ -38,7 +39,7 @@ const App = () => (
               <Route path="cashflow" element={<CashFlow />} />
               
               <Route path="settings" element={<DashboardSettings />} />
-              <Route path="banks" element={<PlaceholderPage title="Bank Accounts" description="Manage connected bank accounts and transactions" />} />
+              <Route path="banks" element={<BankAccounts />} />
               <Route path="invoices" element={<PlaceholderPage title="Invoices & Bills" description="Track accounts receivable and payable" />} />
               <Route path="contacts" element={<Contacts />} />
               <Route path="team" element={<PlaceholderPage title="Team" description="Manage team members and roles" />} />
