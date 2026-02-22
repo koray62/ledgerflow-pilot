@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Upload, FileText, CheckCircle, Clock, AlertCircle, XCircle, Eye, Loader2 } from "lucide-react";
+import { Upload, FileText, CheckCircle, Clock, AlertCircle, XCircle, Eye, Loader2, BookOpen } from "lucide-react";
 import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,6 +28,7 @@ const OCRUpload = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [creatingJE, setCreatingJE] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
   // Fetch documents
@@ -38,7 +39,7 @@ const OCRUpload = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("documents")
-        .select("id, filename, status, ocr_confidence, suggested_vendor, suggested_amount, created_at, file_size, processing_time_ms, mime_type, extracted_data, error_message")
+        .select("id, filename, status, ocr_confidence, suggested_vendor, suggested_amount, created_at, file_size, processing_time_ms, mime_type, extracted_data, error_message, journal_entry_id, suggested_account_id")
         .eq("tenant_id", tenantId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
@@ -139,6 +140,113 @@ const OCRUpload = () => {
     setDragOver(false);
     handleFiles(e.dataTransfer.files);
   };
+
+  const createJournalEntry = useCallback(async (doc: any) => {
+    if (!tenantId || !user) return;
+    const extracted = doc.extracted_data as any;
+    if (!extracted?.total_amount) {
+      toast({ title: "Missing data", description: "No total amount found in extracted data.", variant: "destructive" });
+      return;
+    }
+
+    setCreatingJE(doc.id);
+    try {
+      // Find Accounts Payable account (liability) for credit side
+      const { data: apAccounts } = await supabase
+        .from("chart_of_accounts")
+        .select("id, code, name")
+        .eq("tenant_id", tenantId)
+        .eq("account_type", "liability")
+        .is("deleted_at", null)
+        .eq("is_active", true)
+        .limit(10);
+
+      const apAccount = apAccounts?.find((a) => a.name.toLowerCase().includes("payable")) || apAccounts?.[0];
+      if (!apAccount) {
+        toast({ title: "No liability account", description: "Please create an Accounts Payable account first.", variant: "destructive" });
+        return;
+      }
+
+      // Use suggested account for debit, or fall back to first expense account
+      let debitAccountId = doc.suggested_account_id;
+      if (!debitAccountId) {
+        const { data: expAccounts } = await supabase
+          .from("chart_of_accounts")
+          .select("id")
+          .eq("tenant_id", tenantId)
+          .eq("account_type", "expense")
+          .is("deleted_at", null)
+          .eq("is_active", true)
+          .limit(1)
+          .single();
+        debitAccountId = expAccounts?.id;
+      }
+      if (!debitAccountId) {
+        toast({ title: "No expense account", description: "Please create an expense account first.", variant: "destructive" });
+        return;
+      }
+
+      const entryNumber = `OCR-${Date.now().toString(36).toUpperCase()}`;
+      const totalAmount = Number(extracted.total_amount);
+
+      // Create journal entry
+      const { data: je, error: jeErr } = await supabase
+        .from("journal_entries")
+        .insert({
+          tenant_id: tenantId,
+          entry_number: entryNumber,
+          entry_date: extracted.document_date || new Date().toISOString().split("T")[0],
+          description: `${extracted.vendor_name || "Unknown vendor"} – ${extracted.document_number || doc.filename}`,
+          status: "draft",
+          created_by: user.id,
+          memo: `Auto-created from OCR scan of ${doc.filename}`,
+        })
+        .select("id")
+        .single();
+
+      if (jeErr || !je) throw jeErr || new Error("Failed to create journal entry");
+
+      // Create balanced journal lines (debit expense, credit AP)
+      const { error: linesErr } = await supabase
+        .from("journal_lines")
+        .insert([
+          {
+            tenant_id: tenantId,
+            journal_entry_id: je.id,
+            account_id: debitAccountId,
+            debit: totalAmount,
+            credit: 0,
+            description: extracted.vendor_name ? `${extracted.vendor_name} expense` : "Document expense",
+          },
+          {
+            tenant_id: tenantId,
+            journal_entry_id: je.id,
+            account_id: apAccount.id,
+            debit: 0,
+            credit: totalAmount,
+            description: extracted.vendor_name ? `Payable to ${extracted.vendor_name}` : "Accounts payable",
+          },
+        ]);
+
+      if (linesErr) throw linesErr;
+
+      // Link document to journal entry
+      await supabase
+        .from("documents")
+        .update({ journal_entry_id: je.id })
+        .eq("id", doc.id);
+
+      queryClient.invalidateQueries({ queryKey: ["documents", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["journal-entries", tenantId] });
+
+      toast({ title: "Journal entry created", description: `Entry ${entryNumber} created as draft with balanced debit/credit of ${fmt(totalAmount)}.` });
+    } catch (err: any) {
+      console.error("Create JE error:", err);
+      toast({ title: "Failed to create entry", description: err.message || "Something went wrong.", variant: "destructive" });
+    } finally {
+      setCreatingJE(null);
+    }
+  }, [tenantId, user, queryClient]);
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -322,6 +430,31 @@ const OCRUpload = () => {
                               </table>
                             </div>
                           </div>
+                        )}
+
+                        {/* Create Journal Entry button */}
+                        {(doc.status === "completed" || doc.status === "review_required") && !doc.journal_entry_id && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-2 text-accent border-accent/30 hover:bg-accent/10"
+                            disabled={creatingJE === doc.id}
+                            onClick={(e) => { e.stopPropagation(); createJournalEntry(doc); }}
+                          >
+                            {creatingJE === doc.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <BookOpen className="h-3.5 w-3.5" />
+                            )}
+                            Create Journal Entry
+                          </Button>
+                        )}
+
+                        {doc.journal_entry_id && (
+                          <p className="text-xs text-success flex items-center gap-1">
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            Journal entry created
+                          </p>
                         )}
 
                         {doc.processing_time_ms && (
