@@ -62,11 +62,43 @@ const ChartOfAccounts = () => {
     },
   });
 
+  // Fetch journal line totals per account
+  const accountIds = accounts.map((a) => a.id);
+  const { data: lineTotals = [] } = useQuery({
+    queryKey: ["account-balances", tenantId, accountIds],
+    enabled: !!tenantId && accountIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("journal_lines")
+        .select("account_id, debit, credit")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null)
+        .in("account_id", accountIds);
+      return data ?? [];
+    },
+  });
+
+  // Compute balance per account
+  // Assets & Expenses: debit-normal (balance = debits - credits)
+  // Liabilities, Equity, Revenue: credit-normal (balance = credits - debits)
+  const accountBalances = accountIds.reduce<Record<string, number>>((acc, id) => {
+    const lines = lineTotals.filter((l) => l.account_id === id);
+    const totalDebit = lines.reduce((s, l) => s + Number(l.debit), 0);
+    const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0);
+    const acct = accounts.find((a) => a.id === id);
+    const isDebitNormal = acct?.account_type === "asset" || acct?.account_type === "expense";
+    acc[id] = isDebitNormal ? totalDebit - totalCredit : totalCredit - totalDebit;
+    return acc;
+  }, {});
+
   const filtered = accounts.filter(
     (a) =>
       a.name.toLowerCase().includes(search.toLowerCase()) ||
       a.code.toLowerCase().includes(search.toLowerCase())
   );
+
+  const fmt = (n: number) =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Math.abs(n));
 
   const resetForm = () => {
     setCode("");
@@ -223,22 +255,27 @@ const ChartOfAccounts = () => {
                     <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Code</th>
                     <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Account Name</th>
                     <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Type</th>
-                    <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Description</th>
+                    <th className="pb-3 text-right text-xs font-medium text-muted-foreground">Balance</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((acc) => (
-                    <tr key={acc.id} className="border-b border-border/50 transition-colors hover:bg-muted/50">
-                      <td className="py-3 font-mono text-sm text-muted-foreground">{acc.code}</td>
-                      <td className="py-3 text-sm font-medium text-foreground">{acc.name}</td>
-                      <td className="py-3">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${typeColors[acc.account_type] ?? ""}`}>
-                          {acc.account_type}
-                        </span>
-                      </td>
-                      <td className="py-3 text-sm text-muted-foreground">{acc.description || "—"}</td>
-                    </tr>
-                  ))}
+                  {filtered.map((acc) => {
+                    const balance = accountBalances[acc.id] ?? 0;
+                    return (
+                      <tr key={acc.id} className="border-b border-border/50 transition-colors hover:bg-muted/50">
+                        <td className="py-3 font-mono text-sm text-muted-foreground">{acc.code}</td>
+                        <td className="py-3 text-sm font-medium text-foreground">{acc.name}</td>
+                        <td className="py-3">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${typeColors[acc.account_type] ?? ""}`}>
+                            {acc.account_type}
+                          </span>
+                        </td>
+                        <td className={`py-3 text-right font-mono text-sm ${balance < 0 ? "text-destructive" : "text-foreground"}`}>
+                          {balance < 0 ? `(${fmt(balance)})` : fmt(balance)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
