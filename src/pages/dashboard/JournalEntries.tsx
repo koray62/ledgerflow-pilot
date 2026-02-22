@@ -7,6 +7,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import JournalEntryForm from "@/components/dashboard/JournalEntryForm";
 
 const statusColors: Record<string, string> = {
   posted: "bg-success/10 text-success",
@@ -18,7 +19,7 @@ const statusColors: Record<string, string> = {
 const JournalEntries = () => {
   const { tenantId } = useTenant();
   const [search, setSearch] = useState("");
-
+  const [formOpen, setFormOpen] = useState(false);
   const { data: entries = [], isLoading } = useQuery({
     queryKey: ["journal-entries", tenantId],
     enabled: !!tenantId,
@@ -74,10 +75,12 @@ const JournalEntries = () => {
           <h1 className="text-2xl font-bold text-foreground">Journal Entries</h1>
           <p className="text-sm text-muted-foreground">Double-entry bookkeeping records</p>
         </div>
-        <Button variant="hero" size="sm" className="gap-2">
+        <Button variant="hero" size="sm" className="gap-2" onClick={() => setFormOpen(true)}>
           <Plus className="h-4 w-4" /> New Entry
         </Button>
       </div>
+
+      <JournalEntryForm open={formOpen} onOpenChange={setFormOpen} />
 
       <Card>
         <CardHeader className="pb-3">
