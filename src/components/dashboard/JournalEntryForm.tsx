@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 
 interface JournalLine {
+  id?: string;
   accountId: string;
   debit: string;
   credit: string;
@@ -30,9 +31,10 @@ const emptyLine = (): JournalLine => ({
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  editEntryId?: string | null;
 }
 
-const JournalEntryForm = ({ open, onOpenChange }: Props) => {
+const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
   const { tenantId } = useTenant();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -45,6 +47,9 @@ const JournalEntryForm = ({ open, onOpenChange }: Props) => {
   const [lines, setLines] = useState<JournalLine[]>([emptyLine(), emptyLine()]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [loadingEntry, setLoadingEntry] = useState(false);
+
+  const isEditMode = !!editEntryId;
 
   // Fetch accounts
   const { data: accounts = [] } = useQuery({
@@ -62,11 +67,75 @@ const JournalEntryForm = ({ open, onOpenChange }: Props) => {
     },
   });
 
+  // Load existing entry when editing
+  useEffect(() => {
+    if (!open || !editEntryId || !tenantId) return;
+
+    const loadEntry = async () => {
+      setLoadingEntry(true);
+      try {
+        const [entryRes, linesRes] = await Promise.all([
+          supabase
+            .from("journal_entries")
+            .select("entry_date, description, memo, status")
+            .eq("id", editEntryId)
+            .eq("tenant_id", tenantId)
+            .single(),
+          supabase
+            .from("journal_lines")
+            .select("id, account_id, debit, credit, description")
+            .eq("journal_entry_id", editEntryId)
+            .eq("tenant_id", tenantId)
+            .is("deleted_at", null),
+        ]);
+
+        if (entryRes.data) {
+          setEntryDate(entryRes.data.entry_date);
+          setDescription(entryRes.data.description);
+          setMemo(entryRes.data.memo || "");
+        }
+
+        if (linesRes.data && linesRes.data.length > 0) {
+          setLines(
+            linesRes.data.map((l) => ({
+              id: l.id,
+              accountId: l.account_id,
+              debit: Number(l.debit) > 0 ? String(l.debit) : "",
+              credit: Number(l.credit) > 0 ? String(l.credit) : "",
+              description: l.description || "",
+            }))
+          );
+        } else {
+          setLines([emptyLine(), emptyLine()]);
+        }
+      } catch (err) {
+        console.error("Failed to load entry:", err);
+        toast({ title: "Failed to load entry", variant: "destructive" });
+      } finally {
+        setLoadingEntry(false);
+      }
+    };
+
+    loadEntry();
+  }, [open, editEntryId, tenantId]);
+
+  // Reset form when opening for new entry
+  useEffect(() => {
+    if (open && !editEntryId) {
+      setDescription("");
+      setMemo("");
+      setIsRecurring(false);
+      setRecurrenceInterval("monthly");
+      setEntryDate(new Date().toISOString().split("T")[0]);
+      setLines([emptyLine(), emptyLine()]);
+      setErrors([]);
+    }
+  }, [open, editEntryId]);
+
   const updateLine = (idx: number, field: keyof JournalLine, value: string) => {
     setLines((prev) => prev.map((l, i) => {
       if (i !== idx) return l;
       const updated = { ...l, [field]: value };
-      // If entering debit, clear credit and vice versa
       if (field === "debit" && value) updated.credit = "";
       if (field === "credit" && value) updated.debit = "";
       return updated;
@@ -114,82 +183,127 @@ const JournalEntryForm = ({ open, onOpenChange }: Props) => {
 
     setSaving(true);
     try {
-      const entryNumber = `JE-${Date.now().toString(36).toUpperCase()}`;
+      if (isEditMode && editEntryId) {
+        // Update existing entry
+        const { error: updateErr } = await supabase
+          .from("journal_entries")
+          .update({
+            entry_date: entryDate,
+            description: description.trim(),
+            memo: memo.trim() || null,
+          })
+          .eq("id", editEntryId)
+          .eq("tenant_id", tenantId);
 
-      const { data: je, error: jeErr } = await supabase
-        .from("journal_entries")
-        .insert({
-          tenant_id: tenantId,
-          entry_number: entryNumber,
-          entry_date: entryDate,
-          description: description.trim(),
-          memo: memo.trim() || null,
-          status: "draft",
-          created_by: user.id,
-        })
-        .select("id")
-        .single();
+        if (updateErr) throw updateErr;
 
-      if (jeErr || !je) throw jeErr || new Error("Failed to create entry");
+        // Delete old lines and insert new ones
+        await supabase
+          .from("journal_lines")
+          .delete()
+          .eq("journal_entry_id", editEntryId)
+          .eq("tenant_id", tenantId);
 
-      const lineRows = lines
-        .filter((l) => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
-        .map((l) => ({
-          tenant_id: tenantId,
-          journal_entry_id: je.id,
-          account_id: l.accountId,
-          debit: parseFloat(l.debit) || 0,
-          credit: parseFloat(l.credit) || 0,
-          description: l.description.trim() || null,
-        }));
+        const lineRows = lines
+          .filter((l) => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
+          .map((l) => ({
+            tenant_id: tenantId,
+            journal_entry_id: editEntryId,
+            account_id: l.accountId,
+            debit: parseFloat(l.debit) || 0,
+            credit: parseFloat(l.credit) || 0,
+            description: l.description.trim() || null,
+          }));
 
-      const { error: linesErr } = await supabase
-        .from("journal_lines")
-        .insert(lineRows);
+        const { error: linesErr } = await supabase
+          .from("journal_lines")
+          .insert(lineRows);
 
-      if (linesErr) throw linesErr;
+        if (linesErr) throw linesErr;
 
-      // Create forecast entry if recurring
-      if (isRecurring) {
-        // Net amount: positive = expense (net debit on expense accounts), negative = revenue
-        const netAmount = lineRows.reduce((s, l) => s + l.debit - l.credit, 0);
+        queryClient.invalidateQueries({ queryKey: ["journal-entries", tenantId] });
+        queryClient.invalidateQueries({ queryKey: ["journal-line-totals", tenantId] });
 
-        await supabase.from("forecast_entries").insert({
-          tenant_id: tenantId,
-          forecast_date: entryDate,
-          description: description.trim(),
-          amount: netAmount,
-          category: netAmount >= 0 ? "expense" : "revenue",
-          is_recurring: true,
-          recurrence_interval: recurrenceInterval,
-          created_by: user.id,
-        });
+        toast({ title: "Entry updated", description: "Journal entry has been updated." });
+        onOpenChange(false);
+      } else {
+        // Create new entry
+        const entryNumber = `JE-${Date.now().toString(36).toUpperCase()}`;
 
-        queryClient.invalidateQueries({ queryKey: ["forecast-entries", tenantId] });
+        const { data: je, error: jeErr } = await supabase
+          .from("journal_entries")
+          .insert({
+            tenant_id: tenantId,
+            entry_number: entryNumber,
+            entry_date: entryDate,
+            description: description.trim(),
+            memo: memo.trim() || null,
+            status: "draft",
+            created_by: user.id,
+          })
+          .select("id")
+          .single();
+
+        if (jeErr || !je) throw jeErr || new Error("Failed to create entry");
+
+        const lineRows = lines
+          .filter((l) => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
+          .map((l) => ({
+            tenant_id: tenantId,
+            journal_entry_id: je.id,
+            account_id: l.accountId,
+            debit: parseFloat(l.debit) || 0,
+            credit: parseFloat(l.credit) || 0,
+            description: l.description.trim() || null,
+          }));
+
+        const { error: linesErr } = await supabase
+          .from("journal_lines")
+          .insert(lineRows);
+
+        if (linesErr) throw linesErr;
+
+        // Create forecast entry if recurring
+        if (isRecurring) {
+          const netAmount = lineRows.reduce((s, l) => s + l.debit - l.credit, 0);
+
+          await supabase.from("forecast_entries").insert({
+            tenant_id: tenantId,
+            forecast_date: entryDate,
+            description: description.trim(),
+            amount: netAmount,
+            category: netAmount >= 0 ? "expense" : "revenue",
+            is_recurring: true,
+            recurrence_interval: recurrenceInterval,
+            created_by: user.id,
+          });
+
+          queryClient.invalidateQueries({ queryKey: ["forecast-entries", tenantId] });
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["journal-entries", tenantId] });
+        queryClient.invalidateQueries({ queryKey: ["journal-line-totals", tenantId] });
+
+        const recurLabel = isRecurring ? ` (recurring ${recurrenceInterval})` : "";
+        toast({ title: "Entry created", description: `Journal entry ${entryNumber} saved as draft${recurLabel}.` });
+
+        // Reset form
+        setDescription("");
+        setMemo("");
+        setIsRecurring(false);
+        setRecurrenceInterval("monthly");
+        setEntryDate(new Date().toISOString().split("T")[0]);
+        setLines([emptyLine(), emptyLine()]);
+        setErrors([]);
+        onOpenChange(false);
       }
-
-      queryClient.invalidateQueries({ queryKey: ["journal-entries", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["journal-line-totals", tenantId] });
-
-      const recurLabel = isRecurring ? ` (recurring ${recurrenceInterval})` : "";
-      toast({ title: "Entry created", description: `Journal entry ${entryNumber} saved as draft${recurLabel}.` });
-
-      // Reset form
-      setDescription("");
-      setMemo("");
-      setIsRecurring(false);
-      setRecurrenceInterval("monthly");
-      setEntryDate(new Date().toISOString().split("T")[0]);
-      setLines([emptyLine(), emptyLine()]);
-      setErrors([]);
-      onOpenChange(false);
     } catch (err: any) {
       console.error("Save JE error:", err);
       toast({ title: "Save failed", description: err.message || "Something went wrong.", variant: "destructive" });
     } finally {
       setSaving(false);
     }
-  }, [tenantId, user, entryDate, description, memo, isRecurring, recurrenceInterval, lines, queryClient, onOpenChange]);
+  }, [tenantId, user, entryDate, description, memo, isRecurring, recurrenceInterval, lines, queryClient, onOpenChange, isEditMode, editEntryId]);
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -206,205 +320,215 @@ const JournalEntryForm = ({ open, onOpenChange }: Props) => {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-foreground">New Journal Entry</DialogTitle>
+          <DialogTitle className="text-lg font-bold text-foreground">
+            {isEditMode ? "Edit Journal Entry" : "New Journal Entry"}
+          </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5">
-          {/* Header fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="je-date" className="text-xs text-muted-foreground">Date</Label>
-              <Input
-                id="je-date"
-                type="date"
-                value={entryDate}
-                onChange={(e) => setEntryDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="je-desc" className="text-xs text-muted-foreground">Description *</Label>
-              <Input
-                id="je-desc"
-                placeholder="e.g. Office rent payment"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                maxLength={200}
-              />
-            </div>
+        {loadingEntry ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="je-memo" className="text-xs text-muted-foreground">Memo</Label>
-            <Textarea
-              id="je-memo"
-              placeholder="Optional notes..."
-              value={memo}
-              onChange={(e) => setMemo(e.target.value)}
-              className="resize-none h-16"
-              maxLength={500}
-            />
-           </div>
-
-          {/* Recurring toggle */}
-          <div className="rounded-lg border border-border p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <RefreshCw className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">Recurring Entry</p>
-                  <p className="text-xs text-muted-foreground">Automatically schedule this as a repeating forecast</p>
-                </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Header fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="je-date" className="text-xs text-muted-foreground">Date</Label>
+                <Input
+                  id="je-date"
+                  type="date"
+                  value={entryDate}
+                  onChange={(e) => setEntryDate(e.target.value)}
+                />
               </div>
-              <Switch checked={isRecurring} onCheckedChange={setIsRecurring} />
+              <div className="space-y-1.5">
+                <Label htmlFor="je-desc" className="text-xs text-muted-foreground">Description *</Label>
+                <Input
+                  id="je-desc"
+                  placeholder="e.g. Office rent payment"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  maxLength={200}
+                />
+              </div>
             </div>
-            {isRecurring && (
-              <div className="space-y-1.5 pl-6">
-                <Label className="text-xs text-muted-foreground">Frequency</Label>
-                <Select value={recurrenceInterval} onValueChange={setRecurrenceInterval}>
-                  <SelectTrigger className="h-8 text-xs w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="weekly" className="text-xs">Weekly</SelectItem>
-                    <SelectItem value="biweekly" className="text-xs">Biweekly</SelectItem>
-                    <SelectItem value="monthly" className="text-xs">Monthly</SelectItem>
-                    <SelectItem value="quarterly" className="text-xs">Quarterly</SelectItem>
-                    <SelectItem value="annual" className="text-xs">Annual</SelectItem>
-                  </SelectContent>
-                </Select>
+            <div className="space-y-1.5">
+              <Label htmlFor="je-memo" className="text-xs text-muted-foreground">Memo</Label>
+              <Textarea
+                id="je-memo"
+                placeholder="Optional notes..."
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                className="resize-none h-16"
+                maxLength={500}
+              />
+            </div>
+
+            {/* Recurring toggle - only for new entries */}
+            {!isEditMode && (
+              <div className="rounded-lg border border-border p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Recurring Entry</p>
+                      <p className="text-xs text-muted-foreground">Automatically schedule this as a repeating forecast</p>
+                    </div>
+                  </div>
+                  <Switch checked={isRecurring} onCheckedChange={setIsRecurring} />
+                </div>
+                {isRecurring && (
+                  <div className="space-y-1.5 pl-6">
+                    <Label className="text-xs text-muted-foreground">Frequency</Label>
+                    <Select value={recurrenceInterval} onValueChange={setRecurrenceInterval}>
+                      <SelectTrigger className="h-8 text-xs w-48">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="weekly" className="text-xs">Weekly</SelectItem>
+                        <SelectItem value="biweekly" className="text-xs">Biweekly</SelectItem>
+                        <SelectItem value="monthly" className="text-xs">Monthly</SelectItem>
+                        <SelectItem value="quarterly" className="text-xs">Quarterly</SelectItem>
+                        <SelectItem value="annual" className="text-xs">Annual</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             )}
-          </div>
 
-          {/* Lines */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-foreground">Journal Lines</p>
-              <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={addLine}>
-                <Plus className="h-3.5 w-3.5" /> Add Line
+            {/* Lines */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold text-foreground">Journal Lines</p>
+                <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={addLine}>
+                  <Plus className="h-3.5 w-3.5" /> Add Line
+                </Button>
+              </div>
+
+              <div className="rounded-lg border border-border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 border-b border-border">
+                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-[40%]">Account</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Description</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground w-24">Debit</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground w-24">Credit</th>
+                      <th className="w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((line, idx) => (
+                      <tr key={idx} className="border-b border-border/50">
+                        <td className="px-2 py-1.5">
+                          <Select value={line.accountId} onValueChange={(v) => updateLine(idx, "accountId", v)}>
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Select account" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(accountsByType).map(([type, accts]) => (
+                                <div key={type}>
+                                  <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{type}</div>
+                                  {accts.map((a) => (
+                                    <SelectItem key={a.id} value={a.id} className="text-xs">
+                                      {a.code} – {a.name}
+                                    </SelectItem>
+                                  ))}
+                                </div>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input
+                            className="h-8 text-xs"
+                            placeholder="Line description"
+                            value={line.description}
+                            onChange={(e) => updateLine(idx, "description", e.target.value)}
+                            maxLength={200}
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input
+                            className="h-8 text-xs text-right font-mono"
+                            placeholder="0.00"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={line.debit}
+                            onChange={(e) => updateLine(idx, "debit", e.target.value)}
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input
+                            className="h-8 text-xs text-right font-mono"
+                            placeholder="0.00"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={line.credit}
+                            onChange={(e) => updateLine(idx, "credit", e.target.value)}
+                          />
+                        </td>
+                        <td className="px-1 py-1.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => removeLine(idx)}
+                            disabled={lines.length <= 2}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-muted/30">
+                      <td colSpan={2} className="px-3 py-2 text-right text-xs font-semibold text-muted-foreground">Totals</td>
+                      <td className="px-3 py-2 text-right font-mono text-sm font-semibold text-foreground">{fmt(totalDebit)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-sm font-semibold text-foreground">{fmt(totalCredit)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Balance indicator */}
+              <div className="mt-2 flex items-center justify-end gap-2 text-xs">
+                <span className={`font-mono font-medium ${isBalanced ? "text-success" : totalDebit > 0 || totalCredit > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                  Difference: {fmt(Math.abs(totalDebit - totalCredit))}
+                </span>
+                {isBalanced && <span className="text-success">✓ Balanced</span>}
+              </div>
+            </div>
+
+            {/* Validation errors */}
+            {errors.length > 0 && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1">
+                {errors.map((err, i) => (
+                  <p key={i} className="text-xs text-destructive flex items-start gap-1.5">
+                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    {err}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={saving} className="gap-2">
+                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {isEditMode ? "Save Changes" : "Save as Draft"}
               </Button>
             </div>
-
-            <div className="rounded-lg border border-border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted/50 border-b border-border">
-                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-[40%]">Account</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Description</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground w-24">Debit</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground w-24">Credit</th>
-                    <th className="w-10"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((line, idx) => (
-                    <tr key={idx} className="border-b border-border/50">
-                      <td className="px-2 py-1.5">
-                        <Select value={line.accountId} onValueChange={(v) => updateLine(idx, "accountId", v)}>
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue placeholder="Select account" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(accountsByType).map(([type, accts]) => (
-                              <div key={type}>
-                                <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{type}</div>
-                                {accts.map((a) => (
-                                  <SelectItem key={a.id} value={a.id} className="text-xs">
-                                    {a.code} – {a.name}
-                                  </SelectItem>
-                                ))}
-                              </div>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <Input
-                          className="h-8 text-xs"
-                          placeholder="Line description"
-                          value={line.description}
-                          onChange={(e) => updateLine(idx, "description", e.target.value)}
-                          maxLength={200}
-                        />
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <Input
-                          className="h-8 text-xs text-right font-mono"
-                          placeholder="0.00"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={line.debit}
-                          onChange={(e) => updateLine(idx, "debit", e.target.value)}
-                        />
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <Input
-                          className="h-8 text-xs text-right font-mono"
-                          placeholder="0.00"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={line.credit}
-                          onChange={(e) => updateLine(idx, "credit", e.target.value)}
-                        />
-                      </td>
-                      <td className="px-1 py-1.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => removeLine(idx)}
-                          disabled={lines.length <= 2}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-muted/30">
-                    <td colSpan={2} className="px-3 py-2 text-right text-xs font-semibold text-muted-foreground">Totals</td>
-                    <td className="px-3 py-2 text-right font-mono text-sm font-semibold text-foreground">{fmt(totalDebit)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-sm font-semibold text-foreground">{fmt(totalCredit)}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            {/* Balance indicator */}
-            <div className="mt-2 flex items-center justify-end gap-2 text-xs">
-              <span className={`font-mono font-medium ${isBalanced ? "text-success" : totalDebit > 0 || totalCredit > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                Difference: {fmt(Math.abs(totalDebit - totalCredit))}
-              </span>
-              {isBalanced && <span className="text-success">✓ Balanced</span>}
-            </div>
           </div>
-
-          {/* Validation errors */}
-          {errors.length > 0 && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1">
-              {errors.map((err, i) => (
-                <p key={i} className="text-xs text-destructive flex items-start gap-1.5">
-                  <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                  {err}
-                </p>
-              ))}
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-2">
-              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Save as Draft
-            </Button>
-          </div>
-        </div>
+        )}
       </DialogContent>
     </Dialog>
   );
