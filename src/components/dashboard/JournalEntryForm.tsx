@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Loader2, AlertCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Trash2, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
@@ -39,6 +40,8 @@ const JournalEntryForm = ({ open, onOpenChange }: Props) => {
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [description, setDescription] = useState("");
   const [memo, setMemo] = useState("");
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceInterval, setRecurrenceInterval] = useState("monthly");
   const [lines, setLines] = useState<JournalLine[]>([emptyLine(), emptyLine()]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -146,14 +149,36 @@ const JournalEntryForm = ({ open, onOpenChange }: Props) => {
 
       if (linesErr) throw linesErr;
 
+      // Create forecast entry if recurring
+      if (isRecurring) {
+        // Net amount: positive = expense (net debit on expense accounts), negative = revenue
+        const netAmount = lineRows.reduce((s, l) => s + l.debit - l.credit, 0);
+
+        await supabase.from("forecast_entries").insert({
+          tenant_id: tenantId,
+          forecast_date: entryDate,
+          description: description.trim(),
+          amount: netAmount,
+          category: netAmount >= 0 ? "expense" : "revenue",
+          is_recurring: true,
+          recurrence_interval: recurrenceInterval,
+          created_by: user.id,
+        });
+
+        queryClient.invalidateQueries({ queryKey: ["forecast-entries", tenantId] });
+      }
+
       queryClient.invalidateQueries({ queryKey: ["journal-entries", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["journal-line-totals", tenantId] });
 
-      toast({ title: "Entry created", description: `Journal entry ${entryNumber} saved as draft.` });
+      const recurLabel = isRecurring ? ` (recurring ${recurrenceInterval})` : "";
+      toast({ title: "Entry created", description: `Journal entry ${entryNumber} saved as draft${recurLabel}.` });
 
       // Reset form
       setDescription("");
       setMemo("");
+      setIsRecurring(false);
+      setRecurrenceInterval("monthly");
       setEntryDate(new Date().toISOString().split("T")[0]);
       setLines([emptyLine(), emptyLine()]);
       setErrors([]);
@@ -164,7 +189,7 @@ const JournalEntryForm = ({ open, onOpenChange }: Props) => {
     } finally {
       setSaving(false);
     }
-  }, [tenantId, user, entryDate, description, memo, lines, queryClient, onOpenChange]);
+  }, [tenantId, user, entryDate, description, memo, isRecurring, recurrenceInterval, lines, queryClient, onOpenChange]);
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -217,6 +242,37 @@ const JournalEntryForm = ({ open, onOpenChange }: Props) => {
               className="resize-none h-16"
               maxLength={500}
             />
+           </div>
+
+          {/* Recurring toggle */}
+          <div className="rounded-lg border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">Recurring Entry</p>
+                  <p className="text-xs text-muted-foreground">Automatically schedule this as a repeating forecast</p>
+                </div>
+              </div>
+              <Switch checked={isRecurring} onCheckedChange={setIsRecurring} />
+            </div>
+            {isRecurring && (
+              <div className="space-y-1.5 pl-6">
+                <Label className="text-xs text-muted-foreground">Frequency</Label>
+                <Select value={recurrenceInterval} onValueChange={setRecurrenceInterval}>
+                  <SelectTrigger className="h-8 text-xs w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="weekly" className="text-xs">Weekly</SelectItem>
+                    <SelectItem value="biweekly" className="text-xs">Biweekly</SelectItem>
+                    <SelectItem value="monthly" className="text-xs">Monthly</SelectItem>
+                    <SelectItem value="quarterly" className="text-xs">Quarterly</SelectItem>
+                    <SelectItem value="annual" className="text-xs">Annual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           {/* Lines */}
