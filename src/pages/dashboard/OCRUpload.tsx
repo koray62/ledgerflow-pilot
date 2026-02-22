@@ -1,9 +1,10 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Upload, FileText, CheckCircle, Clock, AlertCircle, XCircle, Eye, Loader2, BookOpen, Camera } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Upload, FileText, CheckCircle, Clock, AlertCircle, XCircle, Eye, Loader2, BookOpen, Camera, X } from "lucide-react";
 import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,11 +27,66 @@ const OCRUpload = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [uploading, setUploading] = useState(false);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [creatingJE, setCreatingJE] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+
+  // Clean up camera stream when modal closes
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
+  const openCamera = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCameraOpen(true);
+      // Attach stream after dialog renders
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      });
+    } catch (err: any) {
+      if (err.name === "NotAllowedError") {
+        toast({ title: "Camera access denied", description: "Please allow camera access in your browser settings.", variant: "destructive" });
+      } else {
+        toast({ title: "Camera unavailable", description: "Could not access camera. Try uploading a file instead.", variant: "destructive" });
+      }
+    }
+  }, []);
+
+  const capturePhoto = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], `scan-${Date.now()}.jpg`, { type: "image/jpeg" });
+      stopCamera();
+      setCameraOpen(false);
+      uploadAndProcess(file);
+    }, "image/jpeg", 0.9);
+  }, [stopCamera]);
+
+  useEffect(() => {
+    if (!cameraOpen) stopCamera();
+  }, [cameraOpen, stopCamera]);
 
   // Fetch documents
   const { data: documents = [], isLoading } = useQuery({
@@ -263,6 +319,38 @@ const OCRUpload = () => {
 
   return (
     <div>
+      {/* Camera modal */}
+      <Dialog open={cameraOpen} onOpenChange={(open) => { if (!open) { stopCamera(); setCameraOpen(false); } }}>
+        <DialogContent className="sm:max-w-lg p-0 overflow-hidden">
+          <div className="relative bg-black">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full aspect-[4/3] object-cover"
+            />
+            <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-4">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 rounded-full bg-background/80 backdrop-blur-sm"
+                onClick={() => { stopCamera(); setCameraOpen(false); }}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+              <Button
+                size="icon"
+                className="h-14 w-14 rounded-full bg-white hover:bg-white/90 text-black shadow-lg"
+                onClick={capturePhoto}
+              >
+                <Camera className="h-6 w-6" />
+              </Button>
+              <div className="h-10 w-10" /> {/* spacer for centering */}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Upload area */}
       <Card className="mb-6">
@@ -282,14 +370,6 @@ const OCRUpload = () => {
               className="hidden"
               accept=".pdf,.jpg,.jpeg,.png,.webp"
               multiple
-              onChange={(e) => handleFiles(e.target.files)}
-            />
-            <input
-              ref={cameraInputRef}
-              type="file"
-              className="hidden"
-              accept="image/*"
-              capture="environment"
               onChange={(e) => handleFiles(e.target.files)}
             />
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
@@ -314,7 +394,7 @@ const OCRUpload = () => {
                 className="gap-1.5"
                 onClick={(e) => {
                   e.stopPropagation();
-                  cameraInputRef.current?.click();
+                  openCamera();
                 }}
               >
                 <Camera className="h-4 w-4" />
