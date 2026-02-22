@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation, Outlet } from "react-router-dom";
+import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   BookOpen, LayoutDashboard, BookText, Receipt, TrendingUp,
   Building2, Users, CreditCard, FileText, Settings, LogOut,
@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 const navItems = [
   { title: "Overview", icon: LayoutDashboard, path: "/dashboard" },
@@ -24,6 +25,13 @@ const navItems = [
 const DashboardLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -87,13 +95,13 @@ const DashboardLayout = () => {
 
         {/* Sign out */}
         <div className="border-t border-sidebar-border p-2">
-          <Link
-            to="/"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
+          <button
+            onClick={handleSignOut}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
           >
             <LogOut className="h-4 w-4" />
             {!collapsed && <span>Sign Out</span>}
-          </Link>
+          </button>
         </div>
       </aside>
 

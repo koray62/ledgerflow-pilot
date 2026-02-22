@@ -24,7 +24,7 @@ const Navbar = () => {
           <Link to="/login">
             <Button variant="ghost" size="sm">Sign In</Button>
           </Link>
-          <Link to="/dashboard">
+          <Link to="/signup">
             <Button variant="hero" size="sm">Start Free Trial</Button>
           </Link>
         </div>
