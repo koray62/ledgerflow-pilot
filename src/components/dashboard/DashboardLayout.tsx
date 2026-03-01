@@ -15,7 +15,7 @@ const navItems = [
   { title: "Chart of Accounts", icon: BookText, path: "/dashboard/accounts" },
   { title: "Journal Entries", icon: FileText, path: "/dashboard/journal" },
   { title: "Bank Accounts", icon: CreditCard, path: "/dashboard/banks" },
-  { title: "Invoices & Bills", icon: Receipt, path: "/dashboard/invoices" },
+  
   { title: "Cash Flow", icon: TrendingUp, path: "/dashboard/cashflow" },
   { title: "Vendors & Customers", icon: Building2, path: "/dashboard/contacts" },
   
