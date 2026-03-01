@@ -1,43 +1,29 @@
 
 
-# Team Management Page
+# Update Default Chart of Accounts Template
 
-## Overview
-Create a Team page at `/dashboard/team` for managing team members (users with roles in the current tenant). Supports inviting new users, updating roles, and removing members. Follows the same patterns as `Contacts.tsx`.
+## What Changes
 
-## Key Constraints
-- `user_tenant_roles` table: only **owners** can INSERT, UPDATE, DELETE roles (per existing RLS)
-- Roles come from `app_role` enum: `owner`, `admin`, `accountant`, `viewer`
-- Need to join `user_tenant_roles` with `profiles` to show user names/emails
-- Inviting a new user requires creating an auth user -- this needs a backend function with service role key
+### 1. Update `create-tenant` Edge Function
+Replace the current 15-account seed list with the full US-standard template (approximately 30 accounts), organized by liquidity preference:
 
-## Implementation
+- **Assets (1000s)**: Cash & Equivalents, AR, Allowance for Doubtful Accounts, Inventory, Prepaid Expenses, Fixed Assets (PP&E), Accumulated Depreciation
+- **Liabilities (2000s)**: AP, Accrued Liabilities, Deferred Revenue, Notes Payable, Sales Tax Payable
+- **Equity (3000s)**: Common Stock, Additional Paid-in Capital, Retained Earnings, Owner's Draw / Dividends
+- **Revenue (4000s)**: Sales Revenue, Service Revenue, Sales Returns & Allowances
+- **COGS (5000s)**: Purchases, Freight-In, Direct Labor (mapped to `expense` type)
+- **Operating Expenses (6000-7999)**: Payroll, Rent/Lease, Utilities, Marketing, Office Supplies, Depreciation Expense
+- **Other Income/Expenses (8000-9999)**: Interest Income (`revenue`), Interest Expense (`expense`), Gain/Loss on Sale of Assets (`expense`)
 
-### 1. New Edge Function: `manage-team-member`
-**Path:** `supabase/functions/manage-team-member/index.ts`
+Each account will include the `description` field from the user's template.
 
-Handles two operations using the service role key:
-- **invite**: Creates a new auth user (via `supabase.auth.admin.createUser` with auto-confirm), creates their profile, and inserts a `user_tenant_roles` record. Requires caller to be tenant owner (verified server-side).
-- **remove**: Soft-deletes the `user_tenant_roles` record (sets `deleted_at`). Does NOT delete the auth user (they may belong to other tenants).
-- **update-role**: Updates the role on `user_tenant_roles`.
+### 2. Enum Mapping
+The current `account_type` enum has 5 values: `asset`, `liability`, `equity`, `revenue`, `expense`. No schema change needed — COGS and operating expenses both map to `expense`, and interest income maps to `revenue`.
 
-Auth: Validates the caller's JWT and checks they are the tenant owner before performing any action.
+### 3. Update ChartOfAccounts Page Display
+Update the `typeColors` map to visually distinguish account ranges in the table (no code-level grouping change needed since the accounts are already sorted by `code`).
 
-### 2. New Page: `src/pages/dashboard/Team.tsx`
-
-Single file containing:
-- **Member list**: Fetches `user_tenant_roles` joined with `profiles` for the current tenant. Displays name, email, role, and joined date.
-- **Invite dialog**: Form with email, first name, last name, temporary password, and role selector. Calls the edge function.
-- **Edit role**: Inline select or dialog to change a member's role. Calls the edge function.
-- **Remove member**: Confirmation dialog, then calls the edge function to soft-delete the role.
-- Search/filter by name or email.
-- Current user cannot remove themselves or change their own role.
-
-### 3. Update `src/App.tsx`
-Replace the `PlaceholderPage` import for `/dashboard/team` with the new `Team` component.
-
-### Files to Create/Modify
-1. **Create** `supabase/functions/manage-team-member/index.ts`
-2. **Create** `src/pages/dashboard/Team.tsx`
-3. **Modify** `src/App.tsx` -- update team route
+### Technical Note
+- The new seed only applies to **newly created tenants**. Existing tenants keep their current accounts.
+- The edge function `create-tenant` will be redeployed automatically.
 
