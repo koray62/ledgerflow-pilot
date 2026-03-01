@@ -64,21 +64,44 @@ Deno.serve(async (req) => {
 
     // Seed default chart of accounts
     const defaultAccounts = [
-      { code: "1000", name: "Cash", account_type: "asset" },
-      { code: "1100", name: "Accounts Receivable", account_type: "asset" },
-      { code: "1500", name: "Equipment", account_type: "asset" },
-      { code: "2000", name: "Accounts Payable", account_type: "liability" },
-      { code: "2100", name: "Credit Card Payable", account_type: "liability" },
-      { code: "3000", name: "Owner's Equity", account_type: "equity" },
-      { code: "3100", name: "Retained Earnings", account_type: "equity" },
-      { code: "4000", name: "Revenue", account_type: "revenue" },
-      { code: "4100", name: "Consulting Revenue", account_type: "revenue" },
-      { code: "5000", name: "Cost of Goods Sold", account_type: "expense" },
-      { code: "6000", name: "Rent Expense", account_type: "expense" },
-      { code: "6100", name: "Utilities Expense", account_type: "expense" },
-      { code: "6200", name: "Payroll Expense", account_type: "expense" },
-      { code: "6300", name: "Office Supplies", account_type: "expense" },
-      { code: "6400", name: "Software Subscriptions", account_type: "expense" },
+      // Assets (1000-1999)
+      { code: "1010", name: "Cash and Cash Equivalents", account_type: "asset", description: "Checking, savings, and petty cash." },
+      { code: "1100", name: "Accounts Receivable (AR)", account_type: "asset", description: "Money owed by customers for credit sales." },
+      { code: "1150", name: "Allowance for Doubtful Accounts", account_type: "asset", description: "Contra-asset; estimated uncollectible AR." },
+      { code: "1200", name: "Inventory", account_type: "asset", description: "Goods held for sale." },
+      { code: "1300", name: "Prepaid Expenses", account_type: "asset", description: "Paid insurance, rent, or taxes not yet used." },
+      { code: "1500", name: "Fixed Assets (PP&E)", account_type: "asset", description: "Land, buildings, and machinery." },
+      { code: "1550", name: "Accumulated Depreciation", account_type: "asset", description: "Contra-asset; total depreciation taken to date." },
+      // Liabilities (2000-2999)
+      { code: "2010", name: "Accounts Payable (AP)", account_type: "liability", description: "Money owed to vendors/suppliers." },
+      { code: "2100", name: "Accrued Liabilities", account_type: "liability", description: "Expenses incurred but not yet invoiced (e.g., wages)." },
+      { code: "2200", name: "Deferred Revenue", account_type: "liability", description: "Money received for services not yet performed." },
+      { code: "2300", name: "Notes Payable", account_type: "liability", description: "Formal loan agreements and bank debt." },
+      { code: "2500", name: "Sales Tax Payable", account_type: "liability", description: "Taxes collected from customers to be remitted." },
+      // Equity (3000-3999)
+      { code: "3010", name: "Common Stock", account_type: "equity", description: "Initial investment by shareholders at par value." },
+      { code: "3100", name: "Additional Paid-in Capital", account_type: "equity", description: "Investment in excess of par value." },
+      { code: "3200", name: "Retained Earnings", account_type: "equity", description: "Cumulative net income minus dividends paid." },
+      { code: "3300", name: "Owner's Draw / Dividends", account_type: "equity", description: "Distributions made to owners or shareholders." },
+      // Revenue (4000-4999)
+      { code: "4010", name: "Sales Revenue", account_type: "revenue", description: "Gross sales of products." },
+      { code: "4020", name: "Service Revenue", account_type: "revenue", description: "Income from professional services." },
+      { code: "4500", name: "Sales Returns and Allowances", account_type: "revenue", description: "Contra-revenue; credits given to customers for returns." },
+      // COGS (5000-5999)
+      { code: "5010", name: "Purchases", account_type: "expense", description: "Raw materials or goods for resale." },
+      { code: "5050", name: "Freight-In", account_type: "expense", description: "Shipping costs to receive inventory." },
+      { code: "5100", name: "Direct Labor", account_type: "expense", description: "Wages for employees directly making the product." },
+      // Operating Expenses (6000-7999)
+      { code: "6010", name: "Payroll Expense", account_type: "expense", description: "Salaries and wages." },
+      { code: "6100", name: "Rent/Lease Expense", account_type: "expense", description: "Facilities costs." },
+      { code: "6200", name: "Utilities Expense", account_type: "expense", description: "Electricity, water, heat." },
+      { code: "6300", name: "Marketing & Advertising", account_type: "expense", description: "Promotion and social media costs." },
+      { code: "6400", name: "Office Supplies", account_type: "expense", description: "Consumable items for daily operations." },
+      { code: "6500", name: "Depreciation Expense", account_type: "expense", description: "Periodic allocation of fixed asset costs." },
+      // Other Income & Expenses (8000-9999)
+      { code: "8010", name: "Interest Income", account_type: "revenue", description: "Earnings from bank balances." },
+      { code: "9010", name: "Interest Expense", account_type: "expense", description: "Costs of borrowing money." },
+      { code: "9050", name: "Gain/Loss on Sale of Assets", account_type: "expense", description: "Difference between book value and sale price." },
     ];
 
     await supabaseAdmin.from("chart_of_accounts").insert(
