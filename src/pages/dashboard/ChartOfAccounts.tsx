@@ -126,20 +126,39 @@ const ChartOfAccounts = () => {
     },
   });
 
-  // Compute balance per account
-  const accountBalances = accountIds.reduce<Record<string, number>>((acc, id) => {
-    const lines = lineTotals.filter((l) => l.account_id === id);
-    const totalDebit = lines.reduce((s, l) => s + Number(l.debit), 0);
-    const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0);
-    const acct = accounts.find((a) => a.id === id);
-    const isDebitNormal = acct?.account_type === "asset" || acct?.account_type === "expense";
-    acc[id] = isDebitNormal ? totalDebit - totalCredit : totalCredit - totalDebit;
-    return acc;
-  }, {});
+  // Compute own balance per account (from journal lines only)
+  const ownBalances = useMemo(() => {
+    return accountIds.reduce<Record<string, number>>((acc, id) => {
+      const lines = lineTotals.filter((l) => l.account_id === id);
+      const totalDebit = lines.reduce((s, l) => s + Number(l.debit), 0);
+      const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0);
+      const acct = accounts.find((a) => a.id === id);
+      const isDebitNormal = acct?.account_type === "asset" || acct?.account_type === "expense";
+      acc[id] = isDebitNormal ? totalDebit - totalCredit : totalCredit - totalDebit;
+      return acc;
+    }, {});
+  }, [accountIds, lineTotals, accounts]);
 
   // Build tree and flatten
   const tree = useMemo(() => buildAccountTree(accounts), [accounts]);
   const flatList = useMemo(() => flattenTree(tree), [tree]);
+
+  // Compute rolled-up balances (parent = sum of all descendants + own)
+  const accountBalances = useMemo(() => {
+    const rolled: Record<string, number> = {};
+    function computeNodeBalance(node: AccountNode): number {
+      const childSum = node.children.reduce((s, c) => s + computeNodeBalance(c), 0);
+      const total = (ownBalances[node.id] ?? 0) + childSum;
+      rolled[node.id] = total;
+      return total;
+    }
+    tree.forEach(computeNodeBalance);
+    // Also include leaf accounts not in tree (shouldn't happen but safety)
+    accounts.forEach((a) => {
+      if (!(a.id in rolled)) rolled[a.id] = ownBalances[a.id] ?? 0;
+    });
+    return rolled;
+  }, [tree, ownBalances, accounts]);
 
   // Filter: when searching, show flat list; otherwise show tree
   const displayList = useMemo(() => {
@@ -173,9 +192,9 @@ const ChartOfAccounts = () => {
       .map((a) => ({ account: a, depth: 0, hasChildren: false }));
   }, [flatList, search, collapsedIds, accounts]);
 
-  // Top-level accounts for parent selector (no parent_id)
+  // All accounts can be parents (for nesting)
   const parentOptions = useMemo(
-    () => accounts.filter((a) => !a.parent_id),
+    () => accounts,
     [accounts]
   );
 
@@ -408,8 +427,12 @@ const ChartOfAccounts = () => {
                   {displayList.map(({ account: acc, depth, hasChildren }) => {
                     const balance = accountBalances[acc.id] ?? 0;
                     const isCollapsed = collapsedIds.has(acc.id);
+                    const isParent = hasChildren;
                     return (
-                      <tr key={acc.id} className="border-b border-border/50 transition-colors hover:bg-muted/50 group">
+                      <tr
+                        key={acc.id}
+                        className={`border-b border-border/50 transition-colors hover:bg-muted/50 group ${isParent && depth === 0 ? "bg-muted/30" : ""}`}
+                      >
                         <td className="py-3 font-mono text-sm text-muted-foreground">
                           <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 1.25}rem` }}>
                             {hasChildren && !search ? (
@@ -428,10 +451,10 @@ const ChartOfAccounts = () => {
                             ) : (
                               <span className="w-[1.125rem]" />
                             )}
-                            {acc.code}
+                            <span className={isParent ? "font-semibold" : ""}>{acc.code}</span>
                           </div>
                         </td>
-                        <td className="py-3 text-sm font-medium text-foreground">
+                        <td className={`py-3 text-sm text-foreground ${isParent ? "font-bold" : "font-medium"}`}>
                           <span style={{ paddingLeft: `${depth * 1.25}rem` }}>
                             {acc.name}
                           </span>
@@ -441,21 +464,19 @@ const ChartOfAccounts = () => {
                             {acc.account_type}
                           </span>
                         </td>
-                        <td className={`py-3 text-right font-mono text-sm ${balance < 0 ? "text-destructive" : "text-foreground"}`}>
+                        <td className={`py-3 text-right font-mono text-sm ${isParent ? "font-semibold" : ""} ${balance < 0 ? "text-destructive" : "text-foreground"}`}>
                           {balance < 0 ? `(${fmt(balance)})` : fmt(balance)}
                         </td>
                         <td className="py-3 text-right">
-                          {!acc.parent_id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Add sub-account"
-                              onClick={() => openAddSubAccount(acc)}
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Add sub-account"
+                            onClick={() => openAddSubAccount(acc)}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </Button>
                         </td>
                       </tr>
                     );
