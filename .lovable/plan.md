@@ -1,29 +1,25 @@
 
 
-# Update Default Chart of Accounts Template
+## Problem
 
-## What Changes
+In the "Review & Approve Journal Entries" table, the Amount column shows plain numbers (e.g., `50000`, `4.22`, `308.3`) without any sign indicator. Since journal entries always use absolute amounts (debit/credit accounts indicate direction), users can't tell at a glance whether the original transaction was an inflow or outflow.
 
-### 1. Update `create-tenant` Edge Function
-Replace the current 15-account seed list with the full US-standard template (approximately 30 accounts), organized by liquidity preference:
+## Solution
 
-- **Assets (1000s)**: Cash & Equivalents, AR, Allowance for Doubtful Accounts, Inventory, Prepaid Expenses, Fixed Assets (PP&E), Accumulated Depreciation
-- **Liabilities (2000s)**: AP, Accrued Liabilities, Deferred Revenue, Notes Payable, Sales Tax Payable
-- **Equity (3000s)**: Common Stock, Additional Paid-in Capital, Retained Earnings, Owner's Draw / Dividends
-- **Revenue (4000s)**: Sales Revenue, Service Revenue, Sales Returns & Allowances
-- **COGS (5000s)**: Purchases, Freight-In, Direct Labor (mapped to `expense` type)
-- **Operating Expenses (6000-7999)**: Payroll, Rent/Lease, Utilities, Marketing, Office Supplies, Depreciation Expense
-- **Other Income/Expenses (8000-9999)**: Interest Income (`revenue`), Interest Expense (`expense`), Gain/Loss on Sale of Assets (`expense`)
+Enhance the Amount column in the suggestions review table to clearly indicate the direction of the original transaction:
 
-Each account will include the `description` field from the user's template.
+1. **Color coding**: Green for inflows (credits/positive original amounts), red for outflows (debits/negative original amounts)
+2. **Prefix indicators**: Show `▲` or `+` for inflows and `▼` or `−` for outflows next to the amount
+3. **Apply to both states**: The pending (editable input) and approved (read-only span) views should both show the direction indicator
 
-### 2. Enum Mapping
-The current `account_type` enum has 5 values: `asset`, `liability`, `equity`, `revenue`, `expense`. No schema change needed — COGS and operating expenses both map to `expense`, and interest income maps to `revenue`.
+### Technical approach
 
-### 3. Update ChartOfAccounts Page Display
-Update the `typeColors` map to visually distinguish account ranges in the table (no code-level grouping change needed since the accounts are already sorted by `code`).
+- Each suggestion object already has `originalTx.amount` which preserves the sign from the CSV. Use this to determine direction.
+- For the **read-only** display: format with color + arrow prefix based on `originalTx.amount` sign
+- For the **editable input**: add a colored badge/label next to the input showing the direction (e.g., a small "IN" or "OUT" badge), since the input itself shows the absolute journal amount
+- Apply similar treatment to the raw transaction preview table (line ~547) which already has color but could benefit from clearer `+`/`-` prefixes
 
-### Technical Note
-- The new seed only applies to **newly created tenants**. Existing tenants keep their current accounts.
-- The edge function `create-tenant` will be redeployed automatically.
+### Files to change
+
+- `src/pages/dashboard/BankAccounts.tsx` — Update the Amount cells in both the transaction preview table and the journal entry review table to include direction indicators and consistent color coding
 
