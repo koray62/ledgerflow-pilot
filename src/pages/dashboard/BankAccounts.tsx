@@ -89,16 +89,32 @@ function convertDate(raw: string, format: string): string {
   return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+function detectDelimiter(text: string): string {
+  const firstLine = text.split(/\r?\n/)[0] || "";
+  // Count occurrences of common delimiters in first line
+  const counts: Record<string, number> = { ",": 0, ";": 0, "\t": 0 };
+  let inQuote = false;
+  for (const ch of firstLine) {
+    if (ch === '"') { inQuote = !inQuote; continue; }
+    if (!inQuote && ch in counts) counts[ch]++;
+  }
+  // Pick the delimiter with the most occurrences
+  if (counts[";"] > counts[","] && counts[";"] > counts["\t"]) return ";";
+  if (counts["\t"] > counts[","] && counts["\t"] > counts[";"]) return "\t";
+  return ",";
+}
+
 function parseCSV(text: string): { headers: string[]; rows: string[][] } {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (!lines.length) return { headers: [], rows: [] };
+  const delimiter = detectDelimiter(text);
   const split = (line: string) => {
     const result: string[] = [];
     let cur = "";
     let inQuote = false;
     for (const ch of line) {
       if (ch === '"') { inQuote = !inQuote; continue; }
-      if (ch === "," && !inQuote) { result.push(cur.trim()); cur = ""; continue; }
+      if (ch === delimiter && !inQuote) { result.push(cur.trim()); cur = ""; continue; }
       cur += ch;
     }
     result.push(cur.trim());
