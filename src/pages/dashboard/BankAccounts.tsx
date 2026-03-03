@@ -587,10 +587,10 @@ export default function BankAccounts() {
                                   <Input value={s.reference} onChange={(e) => updateSuggestion(i, "reference", e.target.value)} className="w-36 font-mono text-xs" />
                                 ) : <span className="font-mono text-xs">{s.reference}</span>}
                               </TableCell>
-                              <TableCell>
+                              <TableCell className="max-w-[300px]">
                                 {s.status === "pending" ? (
-                                  <Input value={s.description} onChange={(e) => updateSuggestion(i, "description", e.target.value)} className="w-48" />
-                                ) : s.description}
+                                  <textarea value={s.description} onChange={(e) => updateSuggestion(i, "description", e.target.value)} className="w-full min-w-[200px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" rows={2} />
+                                ) : <span className="whitespace-pre-wrap">{s.description}</span>}
                               </TableCell>
                               <TableCell>
                                 {s.status === "pending" ? (
@@ -613,13 +613,9 @@ export default function BankAccounts() {
                                   const isInflow = s.originalTx.amount >= 0;
                                   const colorClass = isInflow ? "text-green-600 dark:text-green-400" : "text-destructive";
                                   const arrow = isInflow ? "▲" : "▼";
-                                  const label = isInflow ? "IN" : "OUT";
                                   if (s.status === "pending") {
                                     return (
-                                      <div className="flex items-center gap-1 justify-end">
-                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isInflow ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"}`}>{label}</span>
-                                        <Input type="number" value={s.amount} onChange={(e) => updateSuggestion(i, "amount", parseFloat(e.target.value) || 0)} className="w-24 text-right font-mono" />
-                                      </div>
+                                      <Input type="number" value={s.amount} onChange={(e) => updateSuggestion(i, "amount", parseFloat(e.target.value) || 0)} className={`w-28 text-right font-mono ${isInflow ? "border-green-400 bg-green-50 dark:border-green-600 dark:bg-green-950/30" : "border-red-400 bg-red-50 dark:border-red-600 dark:bg-red-950/30"}`} />
                                     );
                                   }
                                   return <span className={`font-mono ${colorClass}`}>{arrow} {fmt(s.amount)}</span>;
