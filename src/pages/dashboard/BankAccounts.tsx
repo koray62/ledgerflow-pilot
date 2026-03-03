@@ -544,7 +544,9 @@ export default function BankAccounts() {
                           <TableRow key={i}>
                             <TableCell>{t.date}</TableCell>
                             <TableCell>{t.description}</TableCell>
-                            <TableCell className={`text-right font-mono ${t.amount >= 0 ? "text-accent" : "text-destructive"}`}>{fmt(t.amount)}</TableCell>
+                            <TableCell className={`text-right font-mono ${t.amount >= 0 ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>
+                              {t.amount >= 0 ? `+${fmt(t.amount)}` : `−${fmt(Math.abs(t.amount))}`}
+                            </TableCell>
                           </TableRow>
                         ))}
                         {parsedTxs.length > 20 && <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">…and {parsedTxs.length - 20} more</TableCell></TableRow>}
@@ -607,9 +609,21 @@ export default function BankAccounts() {
                                 ) : accountName(s.creditAccountId)}
                               </TableCell>
                               <TableCell className="text-right">
-                                {s.status === "pending" ? (
-                                  <Input type="number" value={s.amount} onChange={(e) => updateSuggestion(i, "amount", parseFloat(e.target.value) || 0)} className="w-24 text-right font-mono" />
-                                ) : <span className="font-mono">{fmt(s.amount)}</span>}
+                                {(() => {
+                                  const isInflow = s.originalTx.amount >= 0;
+                                  const colorClass = isInflow ? "text-green-600 dark:text-green-400" : "text-destructive";
+                                  const arrow = isInflow ? "▲" : "▼";
+                                  const label = isInflow ? "IN" : "OUT";
+                                  if (s.status === "pending") {
+                                    return (
+                                      <div className="flex items-center gap-1 justify-end">
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isInflow ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"}`}>{label}</span>
+                                        <Input type="number" value={s.amount} onChange={(e) => updateSuggestion(i, "amount", parseFloat(e.target.value) || 0)} className="w-24 text-right font-mono" />
+                                      </div>
+                                    );
+                                  }
+                                  return <span className={`font-mono ${colorClass}`}>{arrow} {fmt(s.amount)}</span>;
+                                })()}
                               </TableCell>
                               <TableCell>
                                 {s.status === "pending" && (
