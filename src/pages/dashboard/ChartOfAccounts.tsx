@@ -416,11 +416,12 @@ const ChartOfAccounts = () => {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="pb-3 text-left text-xs font-medium text-muted-foreground w-28">Code</th>
-                    <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Account Name</th>
-                    <th className="pb-3 text-left text-xs font-medium text-muted-foreground w-24">Type</th>
-                    <th className="pb-3 text-right text-xs font-medium text-muted-foreground w-32">Balance</th>
-                    <th className="pb-3 text-right text-xs font-medium text-muted-foreground w-16"></th>
+                     <th className="pb-3 text-left text-xs font-medium text-muted-foreground w-28">Code</th>
+                     <th className="pb-3 text-left text-xs font-medium text-muted-foreground">Account Name</th>
+                     <th className="pb-3 text-left text-xs font-medium text-muted-foreground w-24">Type</th>
+                     <th className="pb-3 text-left text-xs font-medium text-muted-foreground min-w-[200px]">Description</th>
+                     <th className="pb-3 text-right text-xs font-medium text-muted-foreground w-32">Balance</th>
+                     <th className="pb-3 text-right text-xs font-medium text-muted-foreground w-16"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -459,12 +460,15 @@ const ChartOfAccounts = () => {
                             {acc.name}
                           </span>
                         </td>
-                        <td className="py-3">
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${typeColors[acc.account_type] ?? ""}`}>
-                            {acc.account_type}
-                          </span>
-                        </td>
-                        <td className={`py-3 text-right font-mono text-sm ${isParent ? "font-semibold" : ""} ${balance < 0 ? "text-destructive" : "text-foreground"}`}>
+                         <td className="py-3">
+                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${typeColors[acc.account_type] ?? ""}`}>
+                             {acc.account_type}
+                           </span>
+                         </td>
+                         <td className="py-3 text-xs text-muted-foreground max-w-[250px] truncate" title={acc.description ?? ""}>
+                           {acc.description ?? "—"}
+                         </td>
+                         <td className={`py-3 text-right font-mono text-sm ${isParent ? "font-semibold" : ""} ${balance < 0 ? "text-destructive" : "text-foreground"}`}>
                           {balance < 0 ? `(${fmt(balance)})` : fmt(balance)}
                         </td>
                         <td className="py-3 text-right">
