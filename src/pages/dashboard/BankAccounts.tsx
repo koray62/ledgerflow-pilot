@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
@@ -154,7 +154,31 @@ export default function BankAccounts() {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
 
   // Import state
-  const [importAccountId, setImportAccountId] = useState<string | null>(null);
+  // Cache suggestions per bank account so they persist across tab/account switches
+  const suggestionsCache = useRef<Record<string, { suggestions: AISuggestion[]; parsedTxs: ParsedTx[] }>>({});
+
+  const [importAccountId, setImportAccountIdRaw] = useState<string | null>(null);
+
+  // Wrapper: save current suggestions before switching, restore cached ones for new account
+  const setImportAccountId = useCallback((newId: string | null) => {
+    setImportAccountIdRaw((prevId) => {
+      // Save current state for previous account
+      if (prevId && (suggestions.length > 0 || parsedTxs.length > 0)) {
+        suggestionsCache.current[prevId] = { suggestions, parsedTxs };
+      }
+      // Restore cached state for new account (if any)
+      if (newId && suggestionsCache.current[newId]) {
+        const cached = suggestionsCache.current[newId];
+        setSuggestions(cached.suggestions);
+        setParsedTxs(cached.parsedTxs);
+      } else if (newId !== prevId) {
+        // Only clear if actually switching to a different account with no cache
+        setSuggestions([]);
+        setParsedTxs([]);
+      }
+      return newId;
+    });
+  }, [suggestions, parsedTxs]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<string[][]>([]);
   const [colMap, setColMap] = useState<{ dateIdx: number; descIdx: number; amtIdx: number; debitIdx: number; creditIdx: number }>({ dateIdx: -1, descIdx: -1, amtIdx: -1, debitIdx: -1, creditIdx: -1 });
