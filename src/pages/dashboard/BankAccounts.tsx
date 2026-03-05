@@ -587,11 +587,37 @@ export default function BankAccounts() {
                     </div>
                     <div className="overflow-x-auto">
                       <Table>
-                        <TableHeader><TableRow>
-                          <TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead>Reference</TableHead><TableHead>Description</TableHead><TableHead>Debit Account</TableHead><TableHead>Credit Account</TableHead><TableHead className="text-right">Amount</TableHead><TableHead />
-                        </TableRow></TableHeader>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead>Reference</TableHead><TableHead>Description</TableHead><TableHead>Debit Account</TableHead><TableHead>Credit Account</TableHead><TableHead className="text-right">Amount</TableHead><TableHead />
+                          </TableRow>
+                          <TableRow>
+                            <TableHead className="py-1"><Input placeholder="Filter…" value={reviewFilters.status} onChange={(e) => setReviewFilters(f => ({ ...f, status: e.target.value }))} className="h-7 text-xs w-24" /></TableHead>
+                            <TableHead className="py-1"><Input placeholder="Filter…" value={reviewFilters.date} onChange={(e) => setReviewFilters(f => ({ ...f, date: e.target.value }))} className="h-7 text-xs w-28" /></TableHead>
+                            <TableHead className="py-1"><Input placeholder="Filter…" value={reviewFilters.reference} onChange={(e) => setReviewFilters(f => ({ ...f, reference: e.target.value }))} className="h-7 text-xs w-28" /></TableHead>
+                            <TableHead className="py-1"><Input placeholder="Filter…" value={reviewFilters.description} onChange={(e) => setReviewFilters(f => ({ ...f, description: e.target.value }))} className="h-7 text-xs w-40" /></TableHead>
+                            <TableHead className="py-1"><Input placeholder="Filter…" value={reviewFilters.debit} onChange={(e) => setReviewFilters(f => ({ ...f, debit: e.target.value }))} className="h-7 text-xs w-36" /></TableHead>
+                            <TableHead className="py-1"><Input placeholder="Filter…" value={reviewFilters.credit} onChange={(e) => setReviewFilters(f => ({ ...f, credit: e.target.value }))} className="h-7 text-xs w-36" /></TableHead>
+                            <TableHead className="py-1"><Input placeholder="Filter…" value={reviewFilters.amount} onChange={(e) => setReviewFilters(f => ({ ...f, amount: e.target.value }))} className="h-7 text-xs w-24" /></TableHead>
+                            <TableHead />
+                          </TableRow>
+                        </TableHeader>
                         <TableBody>
-                          {suggestions.map((s, i) => (
+                          {suggestions
+                            .map((s, i) => ({ s, i }))
+                            .filter(({ s }) => {
+                              const f = reviewFilters;
+                              const low = (v: string) => v.toLowerCase();
+                              if (f.status && !low(s.status).includes(low(f.status))) return false;
+                              if (f.date && !s.originalTx.date.includes(f.date)) return false;
+                              if (f.reference && !low(s.reference).includes(low(f.reference))) return false;
+                              if (f.description && !low(s.description).includes(low(f.description))) return false;
+                              if (f.debit && !low(accountName(s.debitAccountId)).includes(low(f.debit))) return false;
+                              if (f.credit && !low(accountName(s.creditAccountId)).includes(low(f.credit))) return false;
+                              if (f.amount && !String(s.amount).includes(f.amount)) return false;
+                              return true;
+                            })
+                            .map(({ s, i }) => (
                             <TableRow key={i} className={s.status === "approved" ? "opacity-60" : ""}>
                               <TableCell>
                                 <Badge variant={s.status === "approved" ? "default" : s.status === "skipped" ? "secondary" : "outline"} className="capitalize">
