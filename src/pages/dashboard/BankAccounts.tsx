@@ -164,6 +164,7 @@ export default function BankAccounts() {
   const [aiLoading, setAiLoading] = useState(false);
   const [approving, setApproving] = useState<number | null>(null);
   const [bulkApproving, setBulkApproving] = useState(false);
+  const [reviewFilters, setReviewFilters] = useState({ status: "", date: "", reference: "", description: "", debit: "", credit: "", amount: "" });
 
   /* — queries — */
   const { data: accounts = [], isLoading: accountsLoading } = useQuery({
