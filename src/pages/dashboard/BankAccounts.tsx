@@ -196,6 +196,26 @@ export default function BankAccounts() {
     enabled: !!tenantId,
   });
 
+  const { data: vendors = [] } = useQuery({
+    queryKey: ["vendors", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data } = await supabase.from("vendors").select("id, name").eq("tenant_id", tenantId).is("deleted_at", null).eq("is_active", true);
+      return data ?? [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ["customers", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data } = await supabase.from("customers").select("id, name").eq("tenant_id", tenantId).is("deleted_at", null).eq("is_active", true);
+      return data ?? [];
+    },
+    enabled: !!tenantId,
+  });
+
   /* — CRUD helpers — */
   const resetForm = () => { setFormData({ name: "", institution: "", accountNumber: "", accountType: "checking", currency: "USD" }); setEditId(null); };
 
@@ -283,7 +303,7 @@ export default function BankAccounts() {
     setAiLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("process-bank-csv", {
-        body: { transactions: parsedTxs, accounts: chartAccounts },
+        body: { transactions: parsedTxs, accounts: chartAccounts, vendors, customers },
       });
       if (error) throw error;
       const sug: AISuggestion[] = (data.suggestions || []).map((s: any) => ({

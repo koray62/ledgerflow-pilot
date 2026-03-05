@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { transactions, accounts } = await req.json();
+    const { transactions, accounts, vendors = [], customers = [] } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -31,6 +31,21 @@ serve(async (req) => {
 
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
+    const vendorList = vendors.length
+      ? `\n\nHere are the registered vendors (suppliers):\n${JSON.stringify(vendors.map((v: any) => ({ id: v.id, name: v.name })))}`
+      : "";
+
+    const customerList = customers.length
+      ? `\n\nHere are the registered customers:\n${JSON.stringify(customers.map((c: any) => ({ id: c.id, name: c.name })))}`
+      : "";
+
+    const contactMatchingRules = (vendors.length || customers.length)
+      ? `\n\nIMPORTANT - Contact matching rules:
+- When a transaction description contains or closely matches a VENDOR name, classify it as an expense/payment to that vendor and use the appropriate expense account.
+- When a transaction description contains or closely matches a CUSTOMER name, classify it as revenue/income from that customer (e.g., credit a Sales Revenue account like 4010).
+- Partial name matches count (e.g., "Monai" matches vendor/customer "Monai Finansal").`
+      : "";
+
     const systemPrompt = `You are an expert accountant. You will receive a list of bank transactions and a chart of accounts.
 
 For each transaction, determine the most appropriate debit and credit accounts using double-entry accounting rules:
@@ -40,7 +55,7 @@ For each transaction, determine the most appropriate debit and credit accounts u
 Generate a unique reference code for each transaction in the format CSV-${today}-NNN where NNN is a zero-padded sequential number starting from 001.
 
 Here is the chart of accounts:
-${JSON.stringify(accounts.map((a: any) => ({ id: a.id, code: a.code, name: a.name, type: a.account_type })))}
+${JSON.stringify(accounts.map((a: any) => ({ id: a.id, code: a.code, name: a.name, type: a.account_type })))}${vendorList}${customerList}${contactMatchingRules}
 
 Here are the transactions to process:
 ${JSON.stringify(transactions.map((t: any, i: number) => ({ index: i, date: t.date, description: t.description, amount: t.amount })))}`;
