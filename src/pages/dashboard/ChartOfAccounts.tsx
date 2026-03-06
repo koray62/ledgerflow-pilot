@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, Loader2, ChevronRight, ChevronDown, CornerDownRight } from "lucide-react";
+import { Plus, Search, Loader2, ChevronRight, ChevronDown, CornerDownRight, AlertTriangle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
