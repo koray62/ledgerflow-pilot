@@ -470,7 +470,22 @@ const ChartOfAccounts = () => {
                            {acc.description ?? "—"}
                          </td>
                          <td className={`py-3 text-right font-mono text-sm ${isParent ? "font-semibold" : ""} ${balance < 0 ? "text-destructive" : "text-foreground"}`}>
-                          {balance < 0 ? `(${fmt(balance)})` : fmt(balance)}
+                          <div>{balance < 0 ? `(${fmt(balance)})` : fmt(balance)}</div>
+                          {hasChildren && (ownBalances[acc.id] ?? 0) !== 0 && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center justify-end gap-1 text-[11px] font-normal text-warning cursor-help">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    <span>Own: {(ownBalances[acc.id] ?? 0) < 0 ? `(${fmt(ownBalances[acc.id] ?? 0)})` : fmt(ownBalances[acc.id] ?? 0)}</span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="max-w-[220px] text-xs">
+                                  This parent account has direct entries. Consider reclassifying them to a sub-account for cleaner reporting.
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </td>
                         <td className="py-3 text-right">
                           <Button
