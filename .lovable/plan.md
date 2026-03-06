@@ -1,32 +1,28 @@
 
 
-## Problem
+## QuickBooks-style Balance Display for Chart of Accounts
 
-Parent account balances include their **own** journal line totals in addition to the sum of their children. For example, if journal entries are posted directly to account 2010 (Accounts Payable) AND to its child 2010.01, the parent shows `own_lines + child_balance` instead of just the sum of children.
+### Problem
+The current roll-up logic uses `ownBalance + childSum`, but there's no visual distinction between a parent's direct entries and the rolled-up total. Users need to see both values to understand where money sits.
 
-The user expects: **parent balance = sum of all descendant balances only**. A parent account should act purely as an aggregator when it has children.
+### Solution
+For parent accounts that have both direct journal entries AND children, show a two-line balance display:
+- **Total balance** (bold, primary) = own + children sum (current behavior, kept as-is)
+- **Own balance** shown as a smaller secondary line underneath (e.g., "Own: $500.00") only when the parent has direct entries (own balance != 0)
 
-## Solution
-
-Change the roll-up logic in `src/pages/dashboard/ChartOfAccounts.tsx` so that:
-- **Leaf accounts** (no children): display their own journal line balance as today
-- **Parent accounts** (has children): display **only** the sum of their children's rolled-up balances, ignoring any journal lines posted directly to the parent
-
-### Change
-
-In the `accountBalances` `useMemo` block (~line 149), update `computeNodeBalance`:
-
-```typescript
-function computeNodeBalance(node: AccountNode): number {
-  const childSum = node.children.reduce((s, c) => s + computeNodeBalance(c), 0);
-  // If this node has children, balance = children sum only (parent is aggregator)
-  // If leaf, balance = own journal lines
-  const total = node.children.length > 0 ? childSum : (ownBalances[node.id] ?? 0);
-  rolled[node.id] = total;
-  return total;
-}
-```
+Additionally, show a subtle warning icon/indicator on parent accounts that have direct entries, hinting the user should consider reclassifying those to a sub-account.
 
 ### File to change
-- `src/pages/dashboard/ChartOfAccounts.tsx` — one line change in the `computeNodeBalance` function
+- `src/pages/dashboard/ChartOfAccounts.tsx`
+
+### Changes
+
+1. **Keep existing `computeNodeBalance` as-is** — parent balance = own + children (standard accounting behavior)
+
+2. **Expose `ownBalances` to the render** — already available in scope
+
+3. **Update the Balance column cell** for parent accounts:
+   - Show total (rolled-up) as the main number
+   - If the account has children AND `ownBalances[id] !== 0`, show a second line: `"Own: $X.XX"` in smaller muted text
+   - Add a small warning tooltip icon next to "Own" suggesting reclassification
 
