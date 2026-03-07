@@ -40,6 +40,13 @@ interface ParsedTx {
   amount: number;
 }
 
+interface AISuggestionLine {
+  accountId: string;
+  debit: number;
+  credit: number;
+  description?: string;
+}
+
 interface AISuggestion {
   transactionIndex: number;
   reference: string;
@@ -47,6 +54,7 @@ interface AISuggestion {
   debitAccountId: string;
   creditAccountId: string;
   amount: number;
+  lines?: AISuggestionLine[];
   status: "pending" | "approved" | "skipped";
   originalTx: ParsedTx;
 }
@@ -367,10 +375,25 @@ export default function BankAccounts() {
       if (jeErr) throw jeErr;
 
       // 2. Create journal lines
-      await supabase.from("journal_lines").insert([
-        { journal_entry_id: je.id, account_id: s.debitAccountId, debit: s.amount, credit: 0, tenant_id: tenantId, description: s.description },
-        { journal_entry_id: je.id, account_id: s.creditAccountId, debit: 0, credit: s.amount, tenant_id: tenantId, description: s.description },
-      ]);
+      if (s.lines && s.lines.length > 0) {
+        // Multi-line entry (e.g. revenue with VAT)
+        await supabase.from("journal_lines").insert(
+          s.lines.map((line) => ({
+            journal_entry_id: je.id,
+            account_id: line.accountId,
+            debit: line.debit,
+            credit: line.credit,
+            tenant_id: tenantId,
+            description: line.description || s.description,
+          }))
+        );
+      } else {
+        // Simple 2-line entry
+        await supabase.from("journal_lines").insert([
+          { journal_entry_id: je.id, account_id: s.debitAccountId, debit: s.amount, credit: 0, tenant_id: tenantId, description: s.description },
+          { journal_entry_id: je.id, account_id: s.creditAccountId, debit: 0, credit: s.amount, tenant_id: tenantId, description: s.description },
+        ]);
+      }
 
       // 3. Create bank transaction
       await supabase.from("bank_transactions").insert({
@@ -667,7 +690,29 @@ export default function BankAccounts() {
                                 ) : <span className="whitespace-pre-wrap">{s.description}</span>}
                               </TableCell>
                               <TableCell>
-                                {s.status === "pending" ? (
+                                {s.lines && s.lines.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {s.lines.filter(l => l.debit > 0).map((l, li) => (
+                                      <div key={li} className="text-xs">
+                                        {s.status === "pending" ? (
+                                          <Select value={l.accountId} onValueChange={(v) => {
+                                            const updated = [...suggestions];
+                                            const lines = [...(updated[i].lines || [])];
+                                            const lineIdx = updated[i].lines!.indexOf(l);
+                                            lines[lineIdx] = { ...l, accountId: v };
+                                            updated[i] = { ...updated[i], lines };
+                                            setSuggestions(updated);
+                                          }}>
+                                            <SelectTrigger className="w-44 h-7 text-xs"><SelectValue /></SelectTrigger>
+                                            <SelectContent>{chartAccounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.code} - {a.name}</SelectItem>)}</SelectContent>
+                                          </Select>
+                                        ) : (
+                                          <span>{accountName(l.accountId)} ({fmt(l.debit)})</span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : s.status === "pending" ? (
                                   <Select value={s.debitAccountId} onValueChange={(v) => updateSuggestion(i, "debitAccountId", v)}>
                                     <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
                                     <SelectContent>{chartAccounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.code} - {a.name}</SelectItem>)}</SelectContent>
@@ -675,7 +720,32 @@ export default function BankAccounts() {
                                 ) : accountName(s.debitAccountId)}
                               </TableCell>
                               <TableCell>
-                                {s.status === "pending" ? (
+                                {s.lines && s.lines.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {s.lines.filter(l => l.credit > 0).map((l, li) => (
+                                      <div key={li} className="text-xs">
+                                        {s.status === "pending" ? (
+                                          <div className="flex items-center gap-1">
+                                            <Select value={l.accountId} onValueChange={(v) => {
+                                              const updated = [...suggestions];
+                                              const lines = [...(updated[i].lines || [])];
+                                              const lineIdx = updated[i].lines!.indexOf(l);
+                                              lines[lineIdx] = { ...l, accountId: v };
+                                              updated[i] = { ...updated[i], lines };
+                                              setSuggestions(updated);
+                                            }}>
+                                              <SelectTrigger className="w-36 h-7 text-xs"><SelectValue /></SelectTrigger>
+                                              <SelectContent>{chartAccounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.code} - {a.name}</SelectItem>)}</SelectContent>
+                                            </Select>
+                                            <span className="text-xs text-muted-foreground whitespace-nowrap">{fmt(l.credit)}</span>
+                                          </div>
+                                        ) : (
+                                          <span>{accountName(l.accountId)} ({fmt(l.credit)})</span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : s.status === "pending" ? (
                                   <Select value={s.creditAccountId} onValueChange={(v) => updateSuggestion(i, "creditAccountId", v)}>
                                     <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
                                     <SelectContent>{chartAccounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.code} - {a.name}</SelectItem>)}</SelectContent>

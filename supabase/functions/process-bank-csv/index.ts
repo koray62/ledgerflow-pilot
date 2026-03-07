@@ -48,9 +48,14 @@ serve(async (req) => {
 
     const systemPrompt = `You are an expert accountant. You will receive a list of bank transactions and a chart of accounts.
 
-For each transaction, determine the most appropriate debit and credit accounts using double-entry accounting rules:
-- Money coming IN (positive amounts, deposits, credits): Debit the bank/cash asset account, Credit the appropriate revenue/liability account
-- Money going OUT (negative amounts, withdrawals, debits): Credit the bank/cash asset account, Debit the appropriate expense/asset account
+For each transaction, determine the most appropriate accounts using double-entry accounting rules:
+- Money going OUT (negative amounts, withdrawals, debits): Credit the bank/cash asset account, Debit the appropriate expense/asset account. Return a single entry with debitAccountId and creditAccountId.
+- Money coming IN (positive amounts, deposits, credits) that is SALES REVENUE: Apply 20% VAT automatically. Split into multiple journal lines:
+  * Debit: Bank/Cash asset account for the FULL amount (gross)
+  * Credit: Sales Revenue account for the NET amount (gross / 1.20)
+  * Credit: VAT Payable (Output VAT) account for the VAT amount (gross - net)
+  For these, use the "lines" array format instead of debitAccountId/creditAccountId.
+- Money coming IN that is NOT sales revenue (e.g., loan proceeds, refunds, owner contributions): Debit the bank/cash asset account, Credit the appropriate liability/equity account. Return a single entry with debitAccountId and creditAccountId.
 
 Generate a unique reference code for each transaction in the format CSV-${today}-NNN where NNN is a zero-padded sequential number starting from 001.
 
@@ -107,23 +112,36 @@ ${JSON.stringify(transactions.map((t: any, i: number) => ({ index: i, date: t.da
                           },
                           debitAccountId: {
                             type: "string",
-                            description: "UUID of the debit account from chart of accounts",
+                            description: "UUID of the debit account (for simple 2-line entries). Omit when using lines array.",
                           },
                           creditAccountId: {
                             type: "string",
-                            description: "UUID of the credit account from chart of accounts",
+                            description: "UUID of the credit account (for simple 2-line entries). Omit when using lines array.",
                           },
                           amount: {
                             type: "number",
-                            description: "Absolute amount for the journal entry",
+                            description: "Absolute total amount for the journal entry (gross amount including VAT if applicable)",
+                          },
+                          lines: {
+                            type: "array",
+                            description: "For multi-line entries (e.g. revenue with VAT). When provided, debitAccountId/creditAccountId are ignored.",
+                            items: {
+                              type: "object",
+                              properties: {
+                                accountId: { type: "string", description: "UUID of the account" },
+                                debit: { type: "number", description: "Debit amount (0 if credit)" },
+                                credit: { type: "number", description: "Credit amount (0 if debit)" },
+                                description: { type: "string", description: "Line description" },
+                              },
+                              required: ["accountId", "debit", "credit"],
+                              additionalProperties: false,
+                            },
                           },
                         },
                         required: [
                           "transactionIndex",
                           "reference",
                           "description",
-                          "debitAccountId",
-                          "creditAccountId",
                           "amount",
                         ],
                         additionalProperties: false,
