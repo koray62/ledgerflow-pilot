@@ -375,10 +375,25 @@ export default function BankAccounts() {
       if (jeErr) throw jeErr;
 
       // 2. Create journal lines
-      await supabase.from("journal_lines").insert([
-        { journal_entry_id: je.id, account_id: s.debitAccountId, debit: s.amount, credit: 0, tenant_id: tenantId, description: s.description },
-        { journal_entry_id: je.id, account_id: s.creditAccountId, debit: 0, credit: s.amount, tenant_id: tenantId, description: s.description },
-      ]);
+      if (s.lines && s.lines.length > 0) {
+        // Multi-line entry (e.g. revenue with VAT)
+        await supabase.from("journal_lines").insert(
+          s.lines.map((line) => ({
+            journal_entry_id: je.id,
+            account_id: line.accountId,
+            debit: line.debit,
+            credit: line.credit,
+            tenant_id: tenantId,
+            description: line.description || s.description,
+          }))
+        );
+      } else {
+        // Simple 2-line entry
+        await supabase.from("journal_lines").insert([
+          { journal_entry_id: je.id, account_id: s.debitAccountId, debit: s.amount, credit: 0, tenant_id: tenantId, description: s.description },
+          { journal_entry_id: je.id, account_id: s.creditAccountId, debit: 0, credit: s.amount, tenant_id: tenantId, description: s.description },
+        ]);
+      }
 
       // 3. Create bank transaction
       await supabase.from("bank_transactions").insert({
