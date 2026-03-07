@@ -728,10 +728,24 @@ export default function BankAccounts() {
                                           <div className="flex items-center gap-1">
                                             <Select value={l.accountId} onValueChange={(v) => {
                                               const updated = [...suggestions];
-                                              const lines = [...(updated[i].lines || [])];
-                                              const lineIdx = updated[i].lines!.indexOf(l);
-                                              lines[lineIdx] = { ...l, accountId: v };
-                                              updated[i] = { ...updated[i], lines };
+                                              const selectedAcct = chartAccounts.find(a => a.id === v);
+                                              const isRevenueAcct = selectedAcct?.account_type === "revenue";
+                                              // If changed away from revenue, collapse to simple 2-line entry
+                                              if (!isRevenueAcct) {
+                                                const debitLine = updated[i].lines?.find(ln => ln.debit > 0);
+                                                updated[i] = {
+                                                  ...updated[i],
+                                                  lines: undefined,
+                                                  debitAccountId: debitLine?.accountId || updated[i].debitAccountId,
+                                                  creditAccountId: v,
+                                                };
+                                              } else {
+                                                // Still revenue — just swap the account on the revenue line
+                                                const lines = [...(updated[i].lines || [])];
+                                                const lineIdx = updated[i].lines!.indexOf(l);
+                                                lines[lineIdx] = { ...l, accountId: v };
+                                                updated[i] = { ...updated[i], lines };
+                                              }
                                               setSuggestions(updated);
                                             }}>
                                               <SelectTrigger className="w-36 h-7 text-xs"><SelectValue /></SelectTrigger>
@@ -746,7 +760,29 @@ export default function BankAccounts() {
                                     ))}
                                   </div>
                                 ) : s.status === "pending" ? (
-                                  <Select value={s.creditAccountId} onValueChange={(v) => updateSuggestion(i, "creditAccountId", v)}>
+                                  <Select value={s.creditAccountId} onValueChange={(v) => {
+                                    const selectedAcct = chartAccounts.find(a => a.id === v);
+                                    const isRevenueAcct = selectedAcct?.account_type === "revenue";
+                                    if (isRevenueAcct && s.originalTx.amount > 0) {
+                                      // Auto-expand to 3-line VAT split
+                                      const gross = s.amount;
+                                      const net = Math.round((gross / 1.20) * 100) / 100;
+                                      const vat = Math.round((gross - net) * 100) / 100;
+                                      const vatAccount = chartAccounts.find(a => a.name.toLowerCase().includes("vat payable") || a.name.toLowerCase().includes("output vat"));
+                                      const updated = [...suggestions];
+                                      updated[i] = {
+                                        ...updated[i],
+                                        lines: [
+                                          { accountId: s.debitAccountId, debit: gross, credit: 0, description: "Bank deposit" },
+                                          { accountId: v, debit: 0, credit: net, description: "Sales revenue (net)" },
+                                          { accountId: vatAccount?.id || v, debit: 0, credit: vat, description: "VAT 20%" },
+                                        ],
+                                      };
+                                      setSuggestions(updated);
+                                    } else {
+                                      updateSuggestion(i, "creditAccountId", v);
+                                    }
+                                  }}>
                                     <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
                                     <SelectContent>{chartAccounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.code} - {a.name}</SelectItem>)}</SelectContent>
                                   </Select>
