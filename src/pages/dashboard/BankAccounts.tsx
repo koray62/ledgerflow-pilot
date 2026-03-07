@@ -40,6 +40,13 @@ interface ParsedTx {
   amount: number;
 }
 
+interface AISuggestionLine {
+  accountId: string;
+  debit: number;
+  credit: number;
+  description?: string;
+}
+
 interface AISuggestion {
   transactionIndex: number;
   reference: string;
@@ -47,6 +54,7 @@ interface AISuggestion {
   debitAccountId: string;
   creditAccountId: string;
   amount: number;
+  lines?: AISuggestionLine[];
   status: "pending" | "approved" | "skipped";
   originalTx: ParsedTx;
 }
