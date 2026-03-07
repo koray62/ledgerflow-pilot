@@ -112,23 +112,36 @@ ${JSON.stringify(transactions.map((t: any, i: number) => ({ index: i, date: t.da
                           },
                           debitAccountId: {
                             type: "string",
-                            description: "UUID of the debit account from chart of accounts",
+                            description: "UUID of the debit account (for simple 2-line entries). Omit when using lines array.",
                           },
                           creditAccountId: {
                             type: "string",
-                            description: "UUID of the credit account from chart of accounts",
+                            description: "UUID of the credit account (for simple 2-line entries). Omit when using lines array.",
                           },
                           amount: {
                             type: "number",
-                            description: "Absolute amount for the journal entry",
+                            description: "Absolute total amount for the journal entry (gross amount including VAT if applicable)",
+                          },
+                          lines: {
+                            type: "array",
+                            description: "For multi-line entries (e.g. revenue with VAT). When provided, debitAccountId/creditAccountId are ignored.",
+                            items: {
+                              type: "object",
+                              properties: {
+                                accountId: { type: "string", description: "UUID of the account" },
+                                debit: { type: "number", description: "Debit amount (0 if credit)" },
+                                credit: { type: "number", description: "Credit amount (0 if debit)" },
+                                description: { type: "string", description: "Line description" },
+                              },
+                              required: ["accountId", "debit", "credit"],
+                              additionalProperties: false,
+                            },
                           },
                         },
                         required: [
                           "transactionIndex",
                           "reference",
                           "description",
-                          "debitAccountId",
-                          "creditAccountId",
                           "amount",
                         ],
                         additionalProperties: false,
