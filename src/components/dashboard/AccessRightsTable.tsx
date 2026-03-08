@@ -67,7 +67,10 @@ const PERMISSIONS: PermissionRow[] = [
 
 const PermIcon = ({ allowed }: { allowed: boolean }) =>
   allowed ? (
-    <Check className="h-4 w-4 text-emerald-500 mx-auto" />
+    <Check className="h-4 w-4 text-primary mx-auto" />
+  ) : (
+    <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
+  );
   ) : (
     <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
   );
