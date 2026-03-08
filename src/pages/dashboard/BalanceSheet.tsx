@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
+import { format } from "date-fns";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { AsOfDateFilter } from "@/components/dashboard/DateRangeFilter";
 import type { Database } from "@/integrations/supabase/types";
 
 type AccountType = Database["public"]["Enums"]["account_type"];
@@ -25,8 +26,10 @@ const DEBIT_NORMAL: AccountType[] = ["asset", "expense"];
 
 const BalanceSheet = () => {
   const { tenantId } = useTenant();
+  const [asOfDate, setAsOfDate] = useState<Date | undefined>(new Date());
 
-  // Fetch all active accounts
+  const asOfStr = asOfDate ? format(asOfDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
+
   const { data: accounts = [], isLoading: loadingAccounts } = useQuery({
     queryKey: ["bs-accounts", tenantId],
     enabled: !!tenantId,
@@ -41,18 +44,17 @@ const BalanceSheet = () => {
     },
   });
 
-  // Fetch all journal line totals (only posted entries for accuracy)
   const { data: lineTotals = [], isLoading: loadingLines } = useQuery({
-    queryKey: ["bs-line-totals", tenantId],
+    queryKey: ["bs-line-totals", tenantId, asOfStr],
     enabled: !!tenantId,
     queryFn: async () => {
-      // Get posted journal entry IDs first
       const { data: entries } = await supabase
         .from("journal_entries")
         .select("id")
         .eq("tenant_id", tenantId!)
         .eq("status", "posted")
-        .is("deleted_at", null);
+        .is("deleted_at", null)
+        .lte("entry_date", asOfStr);
 
       if (!entries || entries.length === 0) return [];
 
@@ -69,7 +71,6 @@ const BalanceSheet = () => {
 
   const isLoading = loadingAccounts || loadingLines;
 
-  // Compute own balance per account
   const ownBalances = useMemo(() => {
     const map: Record<string, number> = {};
     for (const acc of accounts) {
@@ -85,33 +86,12 @@ const BalanceSheet = () => {
     return map;
   }, [accounts, lineTotals]);
 
-  // Roll up child balances to parents
-  const rolledUpBalances = useMemo(() => {
-    const map = { ...ownBalances };
-    // For each account with a parent, add its balance to the parent chain
-    for (const acc of accounts) {
-      if (acc.parent_id && map[acc.parent_id] !== undefined) {
-        let parentId: string | null = acc.parent_id;
-        const visited = new Set<string>();
-        while (parentId && !visited.has(parentId)) {
-          visited.add(parentId);
-          // Parent balance already includes own, just add child's own balance
-          // We do this differently: just use own balances for leaf display
-          parentId = accounts.find((a) => a.id === parentId)?.parent_id ?? null;
-        }
-      }
-    }
-    return map;
-  }, [ownBalances, accounts]);
-
-  // Group accounts by type, only BS types (asset, liability, equity)
   const bsTypes: { type: AccountType; label: string; color: string }[] = [
     { type: "asset", label: "Assets", color: "text-blue-400" },
     { type: "liability", label: "Liabilities", color: "text-amber-400" },
     { type: "equity", label: "Equity", color: "text-emerald-400" },
   ];
 
-  // Build tree per type
   const buildTree = (type: AccountType) => {
     const typeAccounts = accounts.filter((a) => a.account_type === type);
     const roots = typeAccounts.filter(
@@ -146,7 +126,6 @@ const BalanceSheet = () => {
     return flatten(roots, 0);
   };
 
-  // Compute section totals
   const sectionTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     for (const { type } of bsTypes) {
@@ -161,7 +140,6 @@ const BalanceSheet = () => {
   const totalLiabilities = sectionTotals["liability"] ?? 0;
   const totalEquity = sectionTotals["equity"] ?? 0;
 
-  // Also compute retained earnings (revenue - expenses)
   const retainedEarnings = useMemo(() => {
     const revenue = accounts
       .filter((a) => a.account_type === "revenue")
@@ -175,11 +153,9 @@ const BalanceSheet = () => {
   const totalLiabilitiesAndEquity = totalLiabilities + totalEquity + retainedEarnings;
   const isBalanced = Math.abs(totalAssets - totalLiabilitiesAndEquity) < 0.01;
 
-  const today = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const displayDate = asOfDate
+    ? asOfDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : "Today";
 
   if (isLoading) {
     return (
@@ -198,17 +174,20 @@ const BalanceSheet = () => {
 
   return (
     <div className="p-6 lg:p-8">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Balance Sheet</h1>
-          <p className="text-sm text-muted-foreground">As of {today} · Posted entries only</p>
+          <p className="text-sm text-muted-foreground">As of {displayDate} · Posted entries only</p>
         </div>
-        <Badge
-          variant={isBalanced ? "default" : "destructive"}
-          className={isBalanced ? "bg-success/10 text-success" : ""}
-        >
-          {isBalanced ? "Balanced ✓" : "Unbalanced ✗"}
-        </Badge>
+        <div className="flex items-center gap-3">
+          <AsOfDateFilter date={asOfDate} onDateChange={setAsOfDate} />
+          <Badge
+            variant={isBalanced ? "default" : "destructive"}
+            className={isBalanced ? "bg-success/10 text-success" : ""}
+          >
+            {isBalanced ? "Balanced ✓" : "Unbalanced ✗"}
+          </Badge>
+        </div>
       </div>
 
       <div className="max-w-3xl space-y-6">
@@ -266,7 +245,6 @@ const BalanceSheet = () => {
           );
         })}
 
-        {/* Retained Earnings */}
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -280,7 +258,6 @@ const BalanceSheet = () => {
           </CardContent>
         </Card>
 
-        {/* Summary */}
         <Card className="border-accent/30">
           <CardContent className="p-4 space-y-2">
             <div className="flex justify-between text-sm">
