@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, AlertTriangle, Upload, X, Lock } from "lucide-react";
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +34,7 @@ const DashboardSettings = () => {
   const [taxId, setTaxId] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [accountingBasis, setAccountingBasis] = useState("accrual");
   const [seeding, setSeeding] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [closingYear, setClosingYear] = useState(false);
@@ -43,7 +45,7 @@ const DashboardSettings = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("name, industry, fiscal_year_end, logo_url, address, tax_id" as any)
+        .select("name, industry, fiscal_year_end, logo_url, address, tax_id, default_currency, accounting_basis" as any)
         .eq("id", tenantId!)
         .single();
       if (error) throw error;
@@ -57,6 +59,7 @@ const DashboardSettings = () => {
       setIndustry(tenant.industry ?? "");
       setFiscalYearEnd(String(tenant.fiscal_year_end ?? 12));
       setDefaultCurrency((tenant as any).default_currency ?? "USD");
+      setAccountingBasis((tenant as any).accounting_basis ?? "accrual");
       setAddress(tenant.address ?? "");
       setTaxId(tenant.tax_id ?? "");
       // Generate signed URL from stored path
@@ -146,6 +149,7 @@ const DashboardSettings = () => {
         industry: industry.trim() || null,
         fiscal_year_end: parseInt(fiscalYearEnd, 10),
         default_currency: defaultCurrency,
+        accounting_basis: accountingBasis,
         address: address.trim() || null,
         tax_id: taxId.trim() || null,
       } as any)
@@ -270,6 +274,28 @@ const DashboardSettings = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Accounting Method</Label>
+                <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                  Controls how revenue and expenses are recognized on financial statements.
+                </p>
+                <RadioGroup value={accountingBasis} onValueChange={setAccountingBasis} className="space-y-2">
+                  <div className="flex items-start gap-3 rounded-lg border border-border p-3">
+                    <RadioGroupItem value="accrual" id="basis-accrual" className="mt-0.5" />
+                    <div>
+                      <Label htmlFor="basis-accrual" className="text-sm font-medium cursor-pointer">Accrual Basis</Label>
+                      <p className="text-xs text-muted-foreground">Revenue recognized when earned, expenses when incurred. Required by GAAP/IFRS.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-lg border border-border p-3">
+                    <RadioGroupItem value="cash" id="basis-cash" className="mt-0.5" />
+                    <div>
+                      <Label htmlFor="basis-cash" className="text-sm font-medium cursor-pointer">Cash Basis</Label>
+                      <p className="text-xs text-muted-foreground">Revenue recognized when cash received, expenses when cash paid. Simpler but less precise.</p>
+                    </div>
+                  </div>
+                </RadioGroup>
               </div>
             </div>
             {can("settings.edit") && (

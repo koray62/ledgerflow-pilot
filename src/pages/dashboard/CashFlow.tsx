@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format, subDays } from "date-fns";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import {
   ResponsiveContainer
 } from "recharts";
 import { AlertTriangle, TrendingUp, DollarSign, Clock, RotateCcw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,7 +17,8 @@ import { DateRangeFilter } from "@/components/dashboard/DateRangeFilter";
 import { formatCurrency as fmtCurrency, formatDisplayDate } from "@/lib/utils";
 
 const CashFlow = () => {
-  const { tenantId, defaultCurrency } = useTenant();
+  const { tenantId, defaultCurrency, accountingBasis } = useTenant();
+  const isCashBasis = accountingBasis === "cash";
   const formatCurrency = (val: number) => fmtCurrency(val, defaultCurrency, { minimumFractionDigits: 0 });
   const [startDate, setStartDate] = useState<Date | undefined>(subDays(new Date(), 30));
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
@@ -24,7 +26,7 @@ const CashFlow = () => {
   const startStr = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
   const endStr = endDate ? format(endDate, "yyyy-MM-dd") : undefined;
 
-  // Fetch chart of accounts to identify cash accounts
+  // Fetch chart of accounts
   const { data: coaAccounts = [] } = useQuery({
     queryKey: ["cf-accounts", tenantId],
     enabled: !!tenantId,
@@ -39,7 +41,7 @@ const CashFlow = () => {
     },
   });
 
-  // Helper: collect a parent and all descendants (children + grandchildren)
+  // Helper: collect a parent and all descendants
   const collectDescendantIds = (parentCode: string, parentType: string) => {
     const parent = coaAccounts.find(a => a.account_type === parentType && a.code === parentCode);
     if (!parent) return [];
@@ -55,11 +57,32 @@ const CashFlow = () => {
       .map(a => a.id);
   };
 
-  // Derive cash account IDs (code 1000 and all descendants)
   const cashAccountIds = collectDescendantIds("1000", "asset");
-
-  // Derive AP account IDs (code 2000 and all descendants)
   const apAccountIds = collectDescendantIds("2000", "liability");
+
+  // AR account IDs (1100 and descendants)
+  const arAccountIds = useMemo(() => {
+    const ar = coaAccounts.find(a => a.code === "1100" && a.account_type === "asset");
+    if (!ar) return [];
+    return [ar.id, ...coaAccounts.filter(a => a.parent_id === ar.id).map(a => a.id)];
+  }, [coaAccounts]);
+
+  // Deferred Revenue account IDs (2200 and descendants)
+  const deferredRevAccountIds = useMemo(() => {
+    const dr = coaAccounts.find(a => a.code === "2200" && a.account_type === "liability");
+    if (!dr) return [];
+    return [dr.id, ...coaAccounts.filter(a => a.parent_id === dr.id).map(a => a.id)];
+  }, [coaAccounts]);
+
+  // Revenue & Expense account IDs for computing Net Income (accrual mode)
+  const revenueAccountIds = useMemo(
+    () => coaAccounts.filter(a => a.account_type === "revenue").map(a => a.id),
+    [coaAccounts]
+  );
+  const expenseAccountIds = useMemo(
+    () => coaAccounts.filter(a => a.account_type === "expense").map(a => a.id),
+    [coaAccounts]
+  );
 
   // Compute cash balance from journal lines on cash accounts
   const { data: cashBalance = 0 } = useQuery({
@@ -76,7 +99,7 @@ const CashFlow = () => {
     },
   });
 
-  // Compute AP balance from journal lines (credit-normal: credits - debits = amount owed)
+  // Compute AP balance
   const { data: apBalance = 0 } = useQuery({
     queryKey: ["cf-ap", tenantId, apAccountIds],
     enabled: !!tenantId && apAccountIds.length > 0,
@@ -91,7 +114,7 @@ const CashFlow = () => {
     },
   });
 
-  // Fetch historical cash account journal lines with dates for actuals
+  // Fetch historical cash account journal lines with dates
   const { data: cashJournalLines = [] } = useQuery({
     queryKey: ["cf-cash-lines", tenantId, cashAccountIds, startStr, endStr],
     enabled: !!tenantId && cashAccountIds.length > 0,
@@ -109,7 +132,63 @@ const CashFlow = () => {
     },
   });
 
-  // Monthly outflows from bills in selected range
+  // Accrual mode: fetch all posted journal lines in date range for Net Income + adjustments
+  const { data: allPeriodLines = [] } = useQuery({
+    queryKey: ["cf-all-period-lines", tenantId, startStr, endStr],
+    enabled: !!tenantId && !isCashBasis,
+    queryFn: async () => {
+      let entryQuery = supabase
+        .from("journal_entries")
+        .select("id")
+        .eq("tenant_id", tenantId!)
+        .eq("status", "posted")
+        .is("deleted_at", null);
+      if (startStr) entryQuery = entryQuery.gte("entry_date", startStr);
+      if (endStr) entryQuery = entryQuery.lte("entry_date", endStr);
+      const { data: entries } = await entryQuery;
+      if (!entries || entries.length === 0) return [];
+      const entryIds = entries.map(e => e.id);
+      const { data } = await supabase
+        .from("journal_lines")
+        .select("account_id, debit, credit")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null)
+        .in("journal_entry_id", entryIds);
+      return data ?? [];
+    },
+  });
+
+  // Accrual-mode computed values
+  const accrualNetIncome = useMemo(() => {
+    if (isCashBasis) return 0;
+    const revSet = new Set(revenueAccountIds);
+    const expSet = new Set(expenseAccountIds);
+    let revenue = 0;
+    let expenses = 0;
+    for (const l of allPeriodLines) {
+      if (revSet.has(l.account_id)) revenue += Number(l.credit) - Number(l.debit);
+      if (expSet.has(l.account_id)) expenses += Number(l.debit) - Number(l.credit);
+    }
+    return revenue - expenses;
+  }, [isCashBasis, allPeriodLines, revenueAccountIds, expenseAccountIds]);
+
+  const accrualARChange = useMemo(() => {
+    if (isCashBasis) return 0;
+    const arSet = new Set(arAccountIds);
+    // Change in AR = net debit increase (debit-normal account)
+    return allPeriodLines.filter(l => arSet.has(l.account_id))
+      .reduce((s, l) => s + Number(l.debit) - Number(l.credit), 0);
+  }, [isCashBasis, allPeriodLines, arAccountIds]);
+
+  const accrualDeferredRevChange = useMemo(() => {
+    if (isCashBasis) return 0;
+    const drSet = new Set(deferredRevAccountIds);
+    // Change in Deferred Revenue = net credit increase (credit-normal)
+    return allPeriodLines.filter(l => drSet.has(l.account_id))
+      .reduce((s, l) => s + Number(l.credit) - Number(l.debit), 0);
+  }, [isCashBasis, allPeriodLines, deferredRevAccountIds]);
+
+  // Monthly outflows from bills
   const { data: monthlyBurn = 0 } = useQuery({
     queryKey: ["cf-burn", tenantId, startStr, endStr],
     enabled: !!tenantId,
@@ -143,7 +222,6 @@ const CashFlow = () => {
     },
   });
 
-  // Future-dated journal entries touching cash accounts (for projection)
   const now = new Date();
   const currentMonthStr = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
   const { data: futureCashJournalLines = [] } = useQuery({
@@ -163,7 +241,7 @@ const CashFlow = () => {
     },
   });
 
-  // Outstanding invoices (AR inflows)
+  // Outstanding invoices
   const { data: outstandingInvoices = [] } = useQuery({
     queryKey: ["cf-invoices", tenantId, startStr, endStr],
     enabled: !!tenantId,
@@ -181,7 +259,7 @@ const CashFlow = () => {
     },
   });
 
-  // Outstanding bills (AP outflows)
+  // Outstanding bills
   const { data: outstandingBills = [], isLoading } = useQuery({
     queryKey: ["cf-bills-outstanding", tenantId, startStr, endStr],
     enabled: !!tenantId,
@@ -203,7 +281,10 @@ const CashFlow = () => {
   const runway = monthlyBurn > 0 ? netCashPosition / monthlyBurn : null;
   const showWarning = runway !== null && runway < 6;
 
-  // Build monthly chart using actuals for past months, projections for future
+  // For accrual mode: Net Cash from Operations = Net Income - ΔAR + ΔDeferred Revenue
+  const accrualNetCashFromOps = accrualNetIncome - accrualARChange + accrualDeferredRevChange;
+
+  // Build monthly chart
   const chartData = (() => {
     const rangeStart = startDate ?? new Date();
     const rangeEnd = endDate ?? new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 12, 0);
@@ -224,7 +305,6 @@ const CashFlow = () => {
       cursor.setMonth(cursor.getMonth() + 1);
     }
 
-    // Opening balance data point
     const result: { month: string; inflow: number; outflow: number; balance: number }[] = [
       { month: "Opening", inflow: 0, outflow: 0, balance: cashBalance },
     ];
@@ -236,31 +316,30 @@ const CashFlow = () => {
       const isPast = m.start < currentMonthStart;
 
       if (isPast) {
-        // Use actual journal line data for past months
         cashJournalLines.forEach((line) => {
           const entryDate = new Date(line.journal_entries.entry_date);
           if (entryDate >= m.start && entryDate <= m.end) {
-            const debit = Number(line.debit);
-            const credit = Number(line.credit);
-            inflow += debit;
-            outflow += credit;
+            inflow += Number(line.debit);
+            outflow += Number(line.credit);
           }
         });
       } else {
-        // Use projections for current and future months
-        outstandingInvoices.forEach((inv) => {
-          const due = new Date(inv.due_date);
-          if (due >= m.start && due <= m.end) {
-            inflow += Number(inv.total_amount) - Number(inv.amount_paid);
-          }
-        });
+        if (!isCashBasis) {
+          // Accrual: project based on AR/AP
+          outstandingInvoices.forEach((inv) => {
+            const due = new Date(inv.due_date);
+            if (due >= m.start && due <= m.end) {
+              inflow += Number(inv.total_amount) - Number(inv.amount_paid);
+            }
+          });
 
-        outstandingBills.forEach((bill) => {
-          const due = new Date(bill.due_date);
-          if (due >= m.start && due <= m.end) {
-            outflow += Number(bill.total_amount) - Number(bill.amount_paid);
-          }
-        });
+          outstandingBills.forEach((bill) => {
+            const due = new Date(bill.due_date);
+            if (due >= m.start && due <= m.end) {
+              outflow += Number(bill.total_amount) - Number(bill.amount_paid);
+            }
+          });
+        }
 
         forecasts.forEach((f) => {
           const fd = new Date(f.forecast_date);
@@ -277,14 +356,11 @@ const CashFlow = () => {
           }
         });
 
-        // Include future-dated journal entries touching cash accounts
         futureCashJournalLines.forEach((line) => {
           const entryDate = new Date(line.journal_entries.entry_date);
           if (entryDate >= m.start && entryDate <= m.end) {
-            const debit = Number(line.debit);
-            const credit = Number(line.credit);
-            inflow += debit;
-            outflow += credit;
+            inflow += Number(line.debit);
+            outflow += Number(line.credit);
           }
         });
       }
@@ -296,21 +372,33 @@ const CashFlow = () => {
     return result;
   })();
 
-  const metrics = [
-    { label: "Burn Rate (Period)", value: formatCurrency(monthlyBurn), icon: TrendingUp },
-    { label: "Runway", value: runway !== null ? `${runway.toFixed(1)} months` : "N/A", icon: Clock },
-    { label: "Net Cash Position", value: formatCurrency(netCashPosition), icon: DollarSign },
-    { label: "Accounts Payable", value: formatCurrency(apBalance), icon: AlertTriangle },
-  ];
+  const metrics = isCashBasis
+    ? [
+        { label: "Burn Rate (Period)", value: formatCurrency(monthlyBurn), icon: TrendingUp },
+        { label: "Runway", value: runway !== null ? `${runway.toFixed(1)} months` : "N/A", icon: Clock },
+        { label: "Cash Balance", value: formatCurrency(cashBalance), icon: DollarSign },
+        { label: "Net Cash Position", value: formatCurrency(netCashPosition), icon: DollarSign },
+      ]
+    : [
+        { label: "Net Income (Accrual)", value: formatCurrency(accrualNetIncome), icon: TrendingUp },
+        { label: "ΔAR (Working Capital)", value: formatCurrency(accrualARChange), icon: Clock },
+        { label: "ΔDeferred Revenue", value: formatCurrency(accrualDeferredRevChange), icon: DollarSign },
+        { label: "Net Cash from Ops", value: formatCurrency(accrualNetCashFromOps), icon: DollarSign },
+      ];
 
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Cash Flow</h1>
-          <p className="text-sm text-muted-foreground">Historical and projected cash flow analysis</p>
+          <p className="text-sm text-muted-foreground">
+            {isCashBasis ? "Direct cash movements" : "Indirect method — starts from Net Income"}
+          </p>
         </div>
         <div className="flex items-center gap-3">
+          <Badge variant="outline" className="text-xs">
+            {isCashBasis ? "Cash Basis" : "Accrual Basis (Indirect)"}
+          </Badge>
           <DateRangeFilter
             startDate={startDate}
             endDate={endDate}
@@ -359,6 +447,49 @@ const CashFlow = () => {
           </Card>
         ))}
       </div>
+
+      {/* Accrual mode: Indirect method reconciliation */}
+      {!isCashBasis && (
+        <Card className="mb-6">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Cash from Operations — Indirect Method</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <table className="w-full text-sm">
+              <tbody>
+                <tr className="border-b border-border/50">
+                  <td className="py-2.5 text-foreground">Net Income</td>
+                  <td className="py-2.5 text-right font-mono font-semibold text-foreground">
+                    {formatCurrency(accrualNetIncome)}
+                  </td>
+                </tr>
+                <tr className="border-b border-border/30">
+                  <td className="py-2.5 text-muted-foreground pl-4">
+                    Less: Increase in Accounts Receivable
+                  </td>
+                  <td className={`py-2.5 text-right font-mono ${accrualARChange > 0 ? "text-destructive" : "text-success"}`}>
+                    {accrualARChange > 0 ? "(" : ""}{formatCurrency(Math.abs(accrualARChange))}{accrualARChange > 0 ? ")" : ""}
+                  </td>
+                </tr>
+                <tr className="border-b border-border/30">
+                  <td className="py-2.5 text-muted-foreground pl-4">
+                    Add: Increase in Deferred Revenue
+                  </td>
+                  <td className={`py-2.5 text-right font-mono ${accrualDeferredRevChange >= 0 ? "text-success" : "text-destructive"}`}>
+                    {formatCurrency(accrualDeferredRevChange)}
+                  </td>
+                </tr>
+                <tr className="border-t-2 border-border">
+                  <td className="py-2.5 font-semibold text-foreground">Net Cash from Operations</td>
+                  <td className={`py-2.5 text-right font-mono font-bold ${accrualNetCashFromOps >= 0 ? "text-success" : "text-destructive"}`}>
+                    {formatCurrency(accrualNetCashFromOps)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-2">
@@ -452,101 +583,105 @@ const CashFlow = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
-            {/* Outstanding Invoices (Inflows) */}
-            <div>
-              <h3 className="text-sm font-semibold text-emerald-500 mb-2">Expected Inflows — Outstanding Invoices</h3>
-              {outstandingInvoices.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2">No outstanding invoices.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Due Date</th>
-                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Status</th>
-                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Total</th>
-                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Paid</th>
-                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Outstanding</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {outstandingInvoices.map((inv, i) => {
-                      const outstanding = Number(inv.total_amount) - Number(inv.amount_paid);
-                      return (
-                        <tr key={i} className="border-b border-border/30 hover:bg-muted/50">
-                          <td className="py-2 text-foreground">{formatDisplayDate(inv.due_date, defaultCurrency)}</td>
-                          <td className="py-2">
-                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                              inv.status === "overdue"
-                                ? "bg-destructive/10 text-destructive"
-                                : "bg-accent/10 text-accent"
-                            }`}>
-                              {inv.status}
-                            </span>
-                          </td>
-                          <td className="py-2 text-right font-mono text-muted-foreground">{formatCurrency(Number(inv.total_amount))}</td>
-                          <td className="py-2 text-right font-mono text-muted-foreground">{formatCurrency(Number(inv.amount_paid))}</td>
-                          <td className="py-2 text-right font-mono font-medium text-emerald-500">{formatCurrency(outstanding)}</td>
-                        </tr>
-                      );
-                    })}
-                    <tr className="border-t border-border bg-muted/30">
-                      <td colSpan={4} className="py-2 text-sm font-semibold text-foreground">Total Expected Inflows</td>
-                      <td className="py-2 text-right font-mono font-bold text-emerald-500">
-                        {formatCurrency(outstandingInvoices.reduce((s, inv) => s + Number(inv.total_amount) - Number(inv.amount_paid), 0))}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              )}
-            </div>
+            {/* Outstanding Invoices (Inflows) — hide in cash mode */}
+            {!isCashBasis && (
+              <div>
+                <h3 className="text-sm font-semibold text-emerald-500 mb-2">Expected Inflows — Outstanding Invoices</h3>
+                {outstandingInvoices.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">No outstanding invoices.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Due Date</th>
+                        <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Status</th>
+                        <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Total</th>
+                        <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Paid</th>
+                        <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Outstanding</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {outstandingInvoices.map((inv, i) => {
+                        const outstanding = Number(inv.total_amount) - Number(inv.amount_paid);
+                        return (
+                          <tr key={i} className="border-b border-border/30 hover:bg-muted/50">
+                            <td className="py-2 text-foreground">{formatDisplayDate(inv.due_date, defaultCurrency)}</td>
+                            <td className="py-2">
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                inv.status === "overdue"
+                                  ? "bg-destructive/10 text-destructive"
+                                  : "bg-accent/10 text-accent"
+                              }`}>
+                                {inv.status}
+                              </span>
+                            </td>
+                            <td className="py-2 text-right font-mono text-muted-foreground">{formatCurrency(Number(inv.total_amount))}</td>
+                            <td className="py-2 text-right font-mono text-muted-foreground">{formatCurrency(Number(inv.amount_paid))}</td>
+                            <td className="py-2 text-right font-mono font-medium text-emerald-500">{formatCurrency(outstanding)}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="border-t border-border bg-muted/30">
+                        <td colSpan={4} className="py-2 text-sm font-semibold text-foreground">Total Expected Inflows</td>
+                        <td className="py-2 text-right font-mono font-bold text-emerald-500">
+                          {formatCurrency(outstandingInvoices.reduce((s, inv) => s + Number(inv.total_amount) - Number(inv.amount_paid), 0))}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
 
-            {/* Outstanding Bills (Outflows) */}
-            <div>
-              <h3 className="text-sm font-semibold text-destructive mb-2">Expected Outflows — Outstanding Bills</h3>
-              {outstandingBills.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2">No outstanding bills.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Due Date</th>
-                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Status</th>
-                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Total</th>
-                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Paid</th>
-                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Outstanding</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {outstandingBills.map((bill, i) => {
-                      const outstanding = Number(bill.total_amount) - Number(bill.amount_paid);
-                      return (
-                        <tr key={i} className="border-b border-border/30 hover:bg-muted/50">
-                          <td className="py-2 text-foreground">{formatDisplayDate(bill.due_date, defaultCurrency)}</td>
-                          <td className="py-2">
-                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                              bill.status === "overdue"
-                                ? "bg-destructive/10 text-destructive"
-                                : "bg-accent/10 text-accent"
-                            }`}>
-                              {bill.status}
-                            </span>
-                          </td>
-                          <td className="py-2 text-right font-mono text-muted-foreground">{formatCurrency(Number(bill.total_amount))}</td>
-                          <td className="py-2 text-right font-mono text-muted-foreground">{formatCurrency(Number(bill.amount_paid))}</td>
-                          <td className="py-2 text-right font-mono font-medium text-destructive">{formatCurrency(outstanding)}</td>
-                        </tr>
-                      );
-                    })}
-                    <tr className="border-t border-border bg-muted/30">
-                      <td colSpan={4} className="py-2 text-sm font-semibold text-foreground">Total Expected Outflows</td>
-                      <td className="py-2 text-right font-mono font-bold text-destructive">
-                        {formatCurrency(outstandingBills.reduce((s, b) => s + Number(b.total_amount) - Number(b.amount_paid), 0))}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              )}
-            </div>
+            {/* Outstanding Bills (Outflows) — hide in cash mode */}
+            {!isCashBasis && (
+              <div>
+                <h3 className="text-sm font-semibold text-destructive mb-2">Expected Outflows — Outstanding Bills</h3>
+                {outstandingBills.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">No outstanding bills.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Due Date</th>
+                        <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Status</th>
+                        <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Total</th>
+                        <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Paid</th>
+                        <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Outstanding</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {outstandingBills.map((bill, i) => {
+                        const outstanding = Number(bill.total_amount) - Number(bill.amount_paid);
+                        return (
+                          <tr key={i} className="border-b border-border/30 hover:bg-muted/50">
+                            <td className="py-2 text-foreground">{formatDisplayDate(bill.due_date, defaultCurrency)}</td>
+                            <td className="py-2">
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                bill.status === "overdue"
+                                  ? "bg-destructive/10 text-destructive"
+                                  : "bg-accent/10 text-accent"
+                              }`}>
+                                {bill.status}
+                              </span>
+                            </td>
+                            <td className="py-2 text-right font-mono text-muted-foreground">{formatCurrency(Number(bill.total_amount))}</td>
+                            <td className="py-2 text-right font-mono text-muted-foreground">{formatCurrency(Number(bill.amount_paid))}</td>
+                            <td className="py-2 text-right font-mono font-medium text-destructive">{formatCurrency(outstanding)}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="border-t border-border bg-muted/30">
+                        <td colSpan={4} className="py-2 text-sm font-semibold text-foreground">Total Expected Outflows</td>
+                        <td className="py-2 text-right font-mono font-bold text-destructive">
+                          {formatCurrency(outstandingBills.reduce((s, b) => s + Number(b.total_amount) - Number(b.amount_paid), 0))}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
 
             {/* Forecast Entries */}
             <div>

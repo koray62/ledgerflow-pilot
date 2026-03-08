@@ -1,0 +1,1 @@
+ALTER TABLE public.tenants ADD COLUMN accounting_basis text NOT NULL DEFAULT 'accrual';

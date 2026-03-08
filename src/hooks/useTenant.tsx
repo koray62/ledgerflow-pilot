@@ -7,6 +7,7 @@ interface TenantContextType {
   tenantName: string | null;
   role: string | null;
   defaultCurrency: string;
+  accountingBasis: string;
   loading: boolean;
 }
 
@@ -15,6 +16,7 @@ const TenantContext = createContext<TenantContextType>({
   tenantName: null,
   role: null,
   defaultCurrency: "USD",
+  accountingBasis: "accrual",
   loading: true,
 });
 
@@ -24,6 +26,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   const [tenantName, setTenantName] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
+  const [accountingBasis, setAccountingBasis] = useState("accrual");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,6 +35,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
       setTenantName(null);
       setRole(null);
       setDefaultCurrency("USD");
+      setAccountingBasis("accrual");
       setLoading(false);
       return;
     }
@@ -52,12 +56,13 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
         const { data: tenant } = await supabase
           .from("tenants")
-          .select("name, default_currency")
+          .select("name, default_currency, accounting_basis")
           .eq("id", utr.tenant_id)
           .maybeSingle() as any;
 
         setTenantName(tenant?.name ?? null);
         setDefaultCurrency(tenant?.default_currency ?? "USD");
+        setAccountingBasis(tenant?.accounting_basis ?? "accrual");
       }
       setLoading(false);
     };
@@ -66,7 +71,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   }, [user]);
 
   return (
-    <TenantContext.Provider value={{ tenantId, tenantName, role, defaultCurrency, loading }}>
+    <TenantContext.Provider value={{ tenantId, tenantName, role, defaultCurrency, accountingBasis, loading }}>
       {children}
     </TenantContext.Provider>
   );
