@@ -445,8 +445,8 @@ const Invoices = () => {
 
     setSaving(true);
     try {
-      const selectedCashAcct = accounts.find((a) => a.id === paymentBankId);
-      if (!selectedCashAcct) throw new Error("Selected cash/bank account not found in chart of accounts");
+      const selectedRevenueAcct = accounts.find((a) => a.id === paymentBankId);
+      if (!selectedRevenueAcct) throw new Error("Selected revenue account not found in chart of accounts");
 
       const entryNum = `JE-PAY-${inv.invoice_number}`;
       const { data: je, error: jeErr } = await supabase
@@ -468,10 +468,10 @@ const Invoices = () => {
         {
           journal_entry_id: je.id,
           tenant_id: tenantId,
-          account_id: selectedCashAcct.id,
+          account_id: selectedRevenueAcct.id,
           debit: Number(inv.total_amount),
           credit: 0,
-          description: `Cash received — Invoice ${inv.invoice_number}`,
+          description: `Revenue recognised — Invoice ${inv.invoice_number}`,
         },
         {
           journal_entry_id: je.id,
@@ -896,16 +896,16 @@ const Invoices = () => {
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
             <DialogDescription>
-              Select the bank account that received the payment for invoice{" "}
+              Select the revenue account for the payment of invoice{" "}
               {invoices.find((i) => i.id === paymentInvoiceId)?.invoice_number}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Label>Cash / Bank Account</Label>
+            <Label>Operating Revenue Account</Label>
             <Select value={paymentBankId} onValueChange={setPaymentBankId}>
-              <SelectTrigger><SelectValue placeholder="Select cash/bank account" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select revenue account" /></SelectTrigger>
               <SelectContent>
-                {cashBankAccounts.map((a) => (
+                {revenueAccounts.map((a) => (
                   <SelectItem key={a.id} value={a.id}>
                     {a.code} — {a.name}
                   </SelectItem>
