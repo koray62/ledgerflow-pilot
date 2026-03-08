@@ -143,6 +143,26 @@ const CashFlow = () => {
     },
   });
 
+  // Future-dated journal entries touching cash accounts (for projection)
+  const now = new Date();
+  const currentMonthStr = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
+  const { data: futureCashJournalLines = [] } = useQuery({
+    queryKey: ["cf-future-je-lines", tenantId, cashAccountIds, currentMonthStr, endStr],
+    enabled: !!tenantId && cashAccountIds.length > 0,
+    queryFn: async () => {
+      let query = supabase
+        .from("journal_lines")
+        .select("debit, credit, journal_entry_id, journal_entries!inner(entry_date)")
+        .eq("tenant_id", tenantId!)
+        .in("account_id", cashAccountIds)
+        .is("deleted_at", null)
+        .gte("journal_entries.entry_date", currentMonthStr);
+      if (endStr) query = query.lte("journal_entries.entry_date", endStr);
+      const { data } = await query;
+      return (data ?? []) as Array<{ debit: number; credit: number; journal_entries: { entry_date: string } }>;
+    },
+  });
+
   // Outstanding invoices (AR inflows)
   const { data: outstandingInvoices = [] } = useQuery({
     queryKey: ["cf-invoices", tenantId, startStr, endStr],
@@ -189,7 +209,6 @@ const CashFlow = () => {
     const rangeEnd = endDate ?? new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 12, 0);
     const firstMonth = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
     const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
-    const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const months: { month: string; label: string; start: Date; end: Date }[] = [];
@@ -255,6 +274,17 @@ const CashFlow = () => {
             if (fd <= m.end) applyForecast();
           } else {
             if (fd >= m.start && fd <= m.end) applyForecast();
+          }
+        });
+
+        // Include future-dated journal entries touching cash accounts
+        futureCashJournalLines.forEach((line) => {
+          const entryDate = new Date(line.journal_entries.entry_date);
+          if (entryDate >= m.start && entryDate <= m.end) {
+            const debit = Number(line.debit);
+            const credit = Number(line.credit);
+            inflow += debit;
+            outflow += credit;
           }
         });
       }
