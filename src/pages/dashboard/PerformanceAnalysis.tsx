@@ -597,15 +597,23 @@ const PerformanceAnalysis = () => {
       y += 4;
 
       // --- Footer ---
+      const safeFooterName = (tenantName || "LedgerPilot").replace(/[^\x20-\x7E]/g, '');
       const totalPages = pdf.getNumberOfPages();
+      const pageH = pdf.internal.pageSize.getHeight();
       for (let p = 1; p <= totalPages; p++) {
         pdf.setPage(p);
+        // Classified banner
         pdf.setFontSize(7);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(180, 40, 40);
+        pdf.text("CONFIDENTIAL — CLASSIFIED INFORMATION", pageW / 2, pageH - 10, { align: "center" });
+        // Company + page info
+        pdf.setFont("helvetica", "normal");
         pdf.setTextColor(160);
         pdf.text(
-          `${tenantName || "LedgerPilot"} · Performance Analysis · Page ${p} of ${totalPages}`,
+          `${safeFooterName} · Performance Analysis · Page ${p} of ${totalPages}`,
           pageW / 2,
-          pdf.internal.pageSize.getHeight() - 6,
+          pageH - 6,
           { align: "center" }
         );
       }
