@@ -484,12 +484,28 @@ const Invoices = () => {
   /* ─── PDF export ─── */
   const exportPdf = async () => {
     if (!previewRef.current) return;
-    const canvas = await html2canvas(previewRef.current, { scale: 2 });
+    const canvas = await html2canvas(previewRef.current, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+    });
     const imgData = canvas.toDataURL("image/png");
     const pdf = new jsPDF("p", "mm", "a4");
-    const w = pdf.internal.pageSize.getWidth();
-    const h = (canvas.height * w) / canvas.width;
-    pdf.addImage(imgData, "PNG", 0, 0, w, h);
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const imgW = pageW;
+    const imgH = (canvas.height * imgW) / canvas.width;
+
+    let position = 0;
+    let remaining = imgH;
+
+    while (remaining > 0) {
+      if (position > 0) pdf.addPage();
+      pdf.addImage(imgData, "PNG", 0, -position, imgW, imgH);
+      position += pageH;
+      remaining -= pageH;
+    }
+
     const inv = invoices.find((i) => i.id === previewInvoiceId);
     pdf.save(`${inv?.invoice_number ?? "invoice"}.pdf`);
   };
