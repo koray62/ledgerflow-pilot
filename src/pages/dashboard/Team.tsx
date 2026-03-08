@@ -25,6 +25,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, UserPlus, Shield, Trash2 } from "lucide-react";
+import AccessRightsTable from "@/components/dashboard/AccessRightsTable";
 import { Constants } from "@/integrations/supabase/types";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -365,6 +366,9 @@ export default function Team() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Access Rights Table */}
+      <AccessRightsTable />
 
       {/* Remove Confirmation */}
       <AlertDialog open={!!removingMember} onOpenChange={(o) => { if (!o) setRemovingMember(null); }}>
