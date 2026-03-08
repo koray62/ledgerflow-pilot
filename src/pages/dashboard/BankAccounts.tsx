@@ -746,6 +746,16 @@ export default function BankAccounts() {
                           <SelectContent>{csvHeaders.map((h, i) => <SelectItem key={i} value={String(i)}>{h}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
+                      <div>
+                        <Label>Detailed Description (Optional)</Label>
+                        <Select value={String(colMap.detailDescIdx)} onValueChange={(v) => setColMap({ ...colMap, detailDescIdx: Number(v) })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="-1">None</SelectItem>
+                            {csvHeaders.map((h, i) => <SelectItem key={i} value={String(i)}>{h}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <Button onClick={applyColumnMapping}>Apply Mapping</Button>
                   </div>
