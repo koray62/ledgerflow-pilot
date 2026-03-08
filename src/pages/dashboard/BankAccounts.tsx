@@ -434,11 +434,57 @@ export default function BankAccounts() {
     }
     setApproving(idx);
     try {
+      // --- Invoice auto-matching ---
+      // Build merged description for matching (same merge logic as AI)
+      const mergedDesc = s.originalTx.detailedDescription
+        ? `${s.originalTx.description} | ${s.originalTx.detailedDescription}`
+        : s.originalTx.description;
+      const invMatches = mergedDesc.match(/INV-\d+/gi) || [];
+      let matchedInvoice: Tables<"invoices"> | null = null;
+      const arAccount = chartAccounts.find(
+        (a) => a.account_type === "asset" && a.name.toLowerCase().includes("receivable")
+      );
+
+      if (invMatches.length > 0 && arAccount) {
+        // Fetch candidate invoices (sent or overdue)
+        const { data: candidateInvoices } = await supabase
+          .from("invoices")
+          .select("*")
+          .eq("tenant_id", tenantId)
+          .in("status", ["sent", "overdue"])
+          .is("deleted_at", null);
+
+        if (candidateInvoices?.length) {
+          for (const invNum of invMatches) {
+            const found = candidateInvoices.find(
+              (inv) =>
+                inv.invoice_number.toLowerCase() === invNum.toLowerCase() &&
+                Math.abs(s.amount) === Number(inv.total_amount)
+            );
+            if (found) {
+              matchedInvoice = found;
+              break;
+            }
+          }
+        }
+      }
+
+      // Determine entry details — override if invoice matched
+      const isInvoicePayment = !!matchedInvoice && !!arAccount;
+      const entryNumber = isInvoicePayment
+        ? `JE-PAY-${matchedInvoice!.invoice_number}`
+        : s.reference;
+      const entryDescription = isInvoicePayment
+        ? `Payment received for Invoice ${matchedInvoice!.invoice_number}`
+        : s.description;
+      // For invoice payment, use the AI-suggested debit account (bank CoA) as the debit side
+      const bankCoAId = s.debitAccountId;
+
       // 1. Create journal entry
       const { data: je, error: jeErr } = await supabase.from("journal_entries").insert({
-        entry_number: s.reference,
+        entry_number: entryNumber,
         entry_date: s.originalTx.date || new Date().toISOString().slice(0, 10),
-        description: s.description,
+        description: entryDescription,
         status: "posted",
         tenant_id: tenantId,
         created_by: user?.id ?? null,
@@ -447,7 +493,28 @@ export default function BankAccounts() {
       if (jeErr) throw jeErr;
 
       // 2. Create journal lines
-      if (s.lines && s.lines.length > 0) {
+      if (isInvoicePayment) {
+        // Payment entry: DR Bank, CR Accounts Receivable
+        const paymentAmount = Number(matchedInvoice!.total_amount);
+        await supabase.from("journal_lines").insert([
+          {
+            journal_entry_id: je.id,
+            tenant_id: tenantId,
+            account_id: bankCoAId,
+            debit: paymentAmount,
+            credit: 0,
+            description: `Cash received — Invoice ${matchedInvoice!.invoice_number}`,
+          },
+          {
+            journal_entry_id: je.id,
+            tenant_id: tenantId,
+            account_id: arAccount!.id,
+            debit: 0,
+            credit: paymentAmount,
+            description: `AR cleared — Invoice ${matchedInvoice!.invoice_number}`,
+          },
+        ]);
+      } else if (s.lines && s.lines.length > 0) {
         // Multi-line entry (e.g. revenue with VAT)
         await supabase.from("journal_lines").insert(
           s.lines.map((line) => ({
@@ -471,13 +538,26 @@ export default function BankAccounts() {
       await supabase.from("bank_transactions").insert({
         bank_account_id: importAccountId,
         journal_entry_id: je.id,
-        reference: s.reference,
+        reference: entryNumber,
         transaction_date: s.originalTx.date || new Date().toISOString().slice(0, 10),
-        description: s.description,
+        description: s.originalTx.description,
         amount: s.amount,
         transaction_type: s.originalTx.amount >= 0 ? "credit" : "debit",
         tenant_id: tenantId,
       } as TablesInsert<"bank_transactions">);
+
+      // 4. If invoice matched, update invoice to paid
+      if (isInvoicePayment) {
+        await supabase
+          .from("invoices")
+          .update({
+            payment_journal_entry_id: je.id,
+            amount_paid: matchedInvoice!.total_amount,
+            status: "paid",
+          } as any)
+          .eq("id", matchedInvoice!.id);
+        qc.invalidateQueries({ queryKey: ["invoices"] });
+      }
 
       setSuggestions((prev) => {
         const updated = prev.map((item, i) => i === idx ? { ...item, status: "approved" as const } : item);
@@ -496,7 +576,11 @@ export default function BankAccounts() {
         }
         return updated;
       });
-      toast({ title: `Entry ${s.reference} approved` });
+
+      const toastMsg = isInvoicePayment
+        ? `Invoice ${matchedInvoice!.invoice_number} auto-matched and marked as paid`
+        : `Entry ${s.reference} approved`;
+      toast({ title: toastMsg });
       qc.invalidateQueries({ queryKey: ["bank_transactions"] });
       qc.invalidateQueries({ queryKey: ["journal_entries"] });
     } catch (err: any) {
@@ -504,7 +588,7 @@ export default function BankAccounts() {
     } finally {
       setApproving(null);
     }
-  }, [suggestions, tenantId, importAccountId, user, toast, qc]);
+  }, [suggestions, tenantId, importAccountId, user, toast, qc, chartAccounts, isDateInClosedYear, readCache, writeCache]);
 
   const updateSuggestion = (idx: number, field: keyof AISuggestion, value: any) => {
     setSuggestions((prev) => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
