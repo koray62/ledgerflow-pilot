@@ -59,6 +59,7 @@ export default function Team() {
   const { tenantId, role: currentUserRole } = useTenant();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { can } = usePermissions();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
