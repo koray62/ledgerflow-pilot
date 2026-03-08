@@ -1,8 +1,10 @@
 import { useState, useMemo } from "react";
-import { format, startOfYear } from "date-fns";
+import { format, startOfYear, subYears } from "date-fns";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -22,10 +24,57 @@ interface Account {
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Math.abs(n));
 
+const fetchLineTotals = async (
+  tenantId: string,
+  startStr?: string,
+  endStr?: string
+) => {
+  let query = supabase
+    .from("journal_entries")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("status", "posted")
+    .is("deleted_at", null);
+
+  if (startStr) query = query.gte("entry_date", startStr);
+  if (endStr) query = query.lte("entry_date", endStr);
+
+  const { data: entries } = await query;
+  if (!entries || entries.length === 0) return [];
+
+  const entryIds = entries.map((e) => e.id);
+  const { data } = await supabase
+    .from("journal_lines")
+    .select("account_id, debit, credit")
+    .eq("tenant_id", tenantId)
+    .is("deleted_at", null)
+    .in("journal_entry_id", entryIds);
+  return data ?? [];
+};
+
+const computeBalances = (
+  accounts: Account[],
+  lineTotals: { account_id: string; debit: number; credit: number }[]
+) => {
+  const map: Record<string, number> = {};
+  for (const acc of accounts) {
+    const lines = lineTotals.filter((l) => l.account_id === acc.id);
+    const isDebitNormal = acc.account_type === "expense";
+    const balance = lines.reduce((s, l) => {
+      const d = Number(l.debit);
+      const c = Number(l.credit);
+      return s + (isDebitNormal ? d - c : c - d);
+    }, 0);
+    map[acc.id] = balance;
+  }
+  return map;
+};
+
 const IncomeStatement = () => {
   const { tenantId } = useTenant();
   const [startDate, setStartDate] = useState<Date | undefined>(startOfYear(new Date()));
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
+  const [compareEnabled, setCompareEnabled] = useState(false);
 
   const startStr = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
   const endStr = endDate ? format(endDate, "yyyy-MM-dd") : undefined;
@@ -48,48 +97,42 @@ const IncomeStatement = () => {
   const { data: lineTotals = [], isLoading: loadingLines } = useQuery({
     queryKey: ["is-line-totals", tenantId, startStr, endStr],
     enabled: !!tenantId,
-    queryFn: async () => {
-      let query = supabase
-        .from("journal_entries")
-        .select("id")
-        .eq("tenant_id", tenantId!)
-        .eq("status", "posted")
-        .is("deleted_at", null);
+    queryFn: () => fetchLineTotals(tenantId!, startStr, endStr),
+  });
 
-      if (startStr) query = query.gte("entry_date", startStr);
-      if (endStr) query = query.lte("entry_date", endStr);
+  // Comparison year queries
+  const compYears = [1, 2, 3];
+  const compDates = compYears.map((offset) => ({
+    start: startDate ? format(subYears(startDate, offset), "yyyy-MM-dd") : undefined,
+    end: endDate ? format(subYears(endDate, offset), "yyyy-MM-dd") : undefined,
+  }));
 
-      const { data: entries } = await query;
-
-      if (!entries || entries.length === 0) return [];
-
-      const entryIds = entries.map((e) => e.id);
-      const { data } = await supabase
-        .from("journal_lines")
-        .select("account_id, debit, credit")
-        .eq("tenant_id", tenantId!)
-        .is("deleted_at", null)
-        .in("journal_entry_id", entryIds);
-      return data ?? [];
-    },
+  const { data: compLines1 = [] } = useQuery({
+    queryKey: ["is-line-totals", tenantId, compDates[0].start, compDates[0].end],
+    enabled: compareEnabled && !!tenantId,
+    queryFn: () => fetchLineTotals(tenantId!, compDates[0].start, compDates[0].end),
+  });
+  const { data: compLines2 = [] } = useQuery({
+    queryKey: ["is-line-totals", tenantId, compDates[1].start, compDates[1].end],
+    enabled: compareEnabled && !!tenantId,
+    queryFn: () => fetchLineTotals(tenantId!, compDates[1].start, compDates[1].end),
+  });
+  const { data: compLines3 = [] } = useQuery({
+    queryKey: ["is-line-totals", tenantId, compDates[2].start, compDates[2].end],
+    enabled: compareEnabled && !!tenantId,
+    queryFn: () => fetchLineTotals(tenantId!, compDates[2].start, compDates[2].end),
   });
 
   const isLoading = loadingAccounts || loadingLines;
 
-  const ownBalances = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const acc of accounts) {
-      const lines = lineTotals.filter((l) => l.account_id === acc.id);
-      const isDebitNormal = acc.account_type === "expense";
-      const balance = lines.reduce((s, l) => {
-        const d = Number(l.debit);
-        const c = Number(l.credit);
-        return s + (isDebitNormal ? d - c : c - d);
-      }, 0);
-      map[acc.id] = balance;
-    }
-    return map;
-  }, [accounts, lineTotals]);
+  const ownBalances = useMemo(() => computeBalances(accounts, lineTotals), [accounts, lineTotals]);
+
+  const compBalances = useMemo(() => {
+    if (!compareEnabled) return [];
+    return [compLines1, compLines2, compLines3].map((lines) =>
+      computeBalances(accounts, lines)
+    );
+  }, [compareEnabled, accounts, compLines1, compLines2, compLines3]);
 
   const sections: { type: AccountType; label: string; color: string }[] = [
     { type: "revenue", label: "Revenue", color: "text-emerald-400" },
@@ -131,12 +174,22 @@ const IncomeStatement = () => {
     return flatten(roots, 0);
   };
 
+  const getBalanceForAccount = (balMap: Record<string, number>, accountId: string, type: AccountType) => {
+    const typeAccounts = accounts.filter((a) => a.account_type === type);
+    const kids = typeAccounts.filter((a) => a.parent_id === accountId);
+    if (kids.length > 0) {
+      return kids.reduce((s, k) => s + (balMap[k.id] ?? 0), 0) + (balMap[accountId] ?? 0);
+    }
+    return balMap[accountId] ?? 0;
+  };
+
+  const getSectionTotal = (balMap: Record<string, number>, type: AccountType) =>
+    accounts.filter((a) => a.account_type === type).reduce((s, a) => s + (balMap[a.id] ?? 0), 0);
+
   const sectionTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     for (const { type } of sections) {
-      totals[type] = accounts
-        .filter((a) => a.account_type === type)
-        .reduce((s, a) => s + (ownBalances[a.id] ?? 0), 0);
+      totals[type] = getSectionTotal(ownBalances, type);
     }
     return totals;
   }, [accounts, ownBalances]);
@@ -144,6 +197,10 @@ const IncomeStatement = () => {
   const totalRevenue = sectionTotals["revenue"] ?? 0;
   const totalExpenses = sectionTotals["expense"] ?? 0;
   const netIncome = totalRevenue - totalExpenses;
+
+  // Year labels for comparison columns
+  const currentYear = startDate ? startDate.getFullYear() : new Date().getFullYear();
+  const yearLabels = [currentYear, currentYear - 1, currentYear - 2, currentYear - 3];
 
   const subtitle = [
     startDate && format(startDate, "MMM d, yyyy"),
@@ -181,6 +238,16 @@ const IncomeStatement = () => {
             onStartDateChange={setStartDate}
             onEndDateChange={setEndDate}
           />
+          <div className="flex items-center gap-1.5">
+            <Switch
+              id="compare-toggle"
+              checked={compareEnabled}
+              onCheckedChange={setCompareEnabled}
+            />
+            <Label htmlFor="compare-toggle" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+              Compare
+            </Label>
+          </div>
           <Badge
             variant="default"
             className={netIncome >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}
@@ -190,7 +257,7 @@ const IncomeStatement = () => {
         </div>
       </div>
 
-      <div className="max-w-3xl space-y-6">
+      <div className={`${compareEnabled ? "max-w-5xl" : "max-w-3xl"} space-y-6 transition-all`}>
         {sections.map(({ type, label, color }) => {
           const rows = buildTree(type);
           const sectionTotal = sectionTotals[type] ?? 0;
@@ -200,7 +267,20 @@ const IncomeStatement = () => {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <h2 className={`text-lg font-bold ${color}`}>{label}</h2>
-                  <span className={`font-mono text-lg font-bold ${color}`}>{fmt(sectionTotal)}</span>
+                  {compareEnabled ? (
+                    <div className="flex items-center gap-4">
+                      <span className={`font-mono text-sm font-bold ${color}`}>
+                        {yearLabels[0]}: {fmt(sectionTotal)}
+                      </span>
+                      {compBalances.map((cb, i) => (
+                        <span key={i} className="font-mono text-sm text-muted-foreground">
+                          {yearLabels[i + 1]}: {fmt(getSectionTotal(cb, type))}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className={`font-mono text-lg font-bold ${color}`}>{fmt(sectionTotal)}</span>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -210,6 +290,18 @@ const IncomeStatement = () => {
                   </p>
                 ) : (
                   <table className="w-full">
+                    {compareEnabled && (
+                      <thead>
+                        <tr className="border-b border-border/50">
+                          <th className="py-2 text-left text-xs font-medium text-muted-foreground">Account</th>
+                          {yearLabels.map((y) => (
+                            <th key={y} className="py-2 text-right text-xs font-medium text-muted-foreground pr-2">
+                              {y}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                    )}
                     <tbody>
                       {rows.map(({ account, depth, balance, hasChildren }) => (
                         <tr
@@ -231,6 +323,14 @@ const IncomeStatement = () => {
                               <span className="text-muted-foreground">{fmt(balance)}</span>
                             )}
                           </td>
+                          {compareEnabled &&
+                            compBalances.map((cb, i) => (
+                              <td key={i} className="py-2.5 text-right font-mono text-sm pr-2">
+                                <span className="text-muted-foreground">
+                                  {fmt(getBalanceForAccount(cb, account.id, account.account_type))}
+                                </span>
+                              </td>
+                            ))}
                         </tr>
                       ))}
                     </tbody>
@@ -243,20 +343,73 @@ const IncomeStatement = () => {
 
         <Card className="border-accent/30">
           <CardContent className="p-4 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Total Revenue</span>
-              <span className="font-mono font-semibold text-foreground">{fmt(totalRevenue)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Total Expenses</span>
-              <span className="font-mono font-semibold text-foreground">{fmt(totalExpenses)}</span>
-            </div>
-            <div className="border-t border-border pt-2 flex justify-between text-sm">
-              <span className="font-semibold text-foreground">Net Income</span>
-              <span className={`font-mono font-bold ${netIncome >= 0 ? "text-success" : "text-destructive"}`}>
-                {netIncome < 0 && "("}{fmt(netIncome)}{netIncome < 0 && ")"}
-              </span>
-            </div>
+            {compareEnabled ? (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border/50">
+                    <th className="py-2 text-left text-xs font-medium text-muted-foreground"></th>
+                    {yearLabels.map((y) => (
+                      <th key={y} className="py-2 text-right text-xs font-medium text-muted-foreground pr-2">
+                        {y}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-border/30">
+                    <td className="py-2 text-sm text-muted-foreground">Total Revenue</td>
+                    <td className="py-2 text-right font-mono text-sm font-semibold text-foreground pr-2">{fmt(totalRevenue)}</td>
+                    {compBalances.map((cb, i) => (
+                      <td key={i} className="py-2 text-right font-mono text-sm text-muted-foreground pr-2">
+                        {fmt(getSectionTotal(cb, "revenue"))}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="border-b border-border/30">
+                    <td className="py-2 text-sm text-muted-foreground">Total Expenses</td>
+                    <td className="py-2 text-right font-mono text-sm font-semibold text-foreground pr-2">{fmt(totalExpenses)}</td>
+                    {compBalances.map((cb, i) => (
+                      <td key={i} className="py-2 text-right font-mono text-sm text-muted-foreground pr-2">
+                        {fmt(getSectionTotal(cb, "expense"))}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="border-t border-border">
+                    <td className="py-2 text-sm font-semibold text-foreground">Net Income</td>
+                    <td className={`py-2 text-right font-mono text-sm font-bold pr-2 ${netIncome >= 0 ? "text-success" : "text-destructive"}`}>
+                      {netIncome < 0 && "("}{fmt(netIncome)}{netIncome < 0 && ")"}
+                    </td>
+                    {compBalances.map((cb, i) => {
+                      const rev = getSectionTotal(cb, "revenue");
+                      const exp = getSectionTotal(cb, "expense");
+                      const net = rev - exp;
+                      return (
+                        <td key={i} className={`py-2 text-right font-mono text-sm pr-2 ${net >= 0 ? "text-success" : "text-destructive"}`}>
+                          {net < 0 && "("}{fmt(net)}{net < 0 && ")"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            ) : (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total Revenue</span>
+                  <span className="font-mono font-semibold text-foreground">{fmt(totalRevenue)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total Expenses</span>
+                  <span className="font-mono font-semibold text-foreground">{fmt(totalExpenses)}</span>
+                </div>
+                <div className="border-t border-border pt-2 flex justify-between text-sm">
+                  <span className="font-semibold text-foreground">Net Income</span>
+                  <span className={`font-mono font-bold ${netIncome >= 0 ? "text-success" : "text-destructive"}`}>
+                    {netIncome < 0 && "("}{fmt(netIncome)}{netIncome < 0 && ")"}
+                  </span>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
