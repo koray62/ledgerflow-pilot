@@ -13,6 +13,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
 import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -194,6 +195,7 @@ const ChartOfAccounts = () => {
       const entry = entriesMap.get(line.journal_entry_id);
       return {
         id: line.id,
+        journalEntryId: line.journal_entry_id,
         date: entry?.entry_date ?? "",
         entryNumber: entry?.entry_number ?? "",
         description: line.description || entry?.description || "",
@@ -597,7 +599,10 @@ const ChartOfAccounts = () => {
                   {ledgerRows.map((row) => (
                     <TableRow key={row.id}>
                       <TableCell className="font-mono text-xs">{row.date}</TableCell>
-                      <TableCell className="font-mono text-xs">{row.entryNumber}</TableCell>
+                      <TableCell
+                        className="font-mono text-xs text-accent underline cursor-pointer hover:text-accent/80"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/journal?edit=${row.journalEntryId}`); }}
+                      >{row.entryNumber}</TableCell>
                       <TableCell className="text-sm truncate max-w-[200px]" title={row.description}>{row.description || "—"}</TableCell>
                       <TableCell className="text-right font-mono text-sm">{row.debit > 0 ? fmt(row.debit) : ""}</TableCell>
                       <TableCell className="text-right font-mono text-sm">{row.credit > 0 ? fmt(row.credit) : ""}</TableCell>
