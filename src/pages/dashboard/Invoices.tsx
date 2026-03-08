@@ -426,7 +426,8 @@ const Invoices = () => {
 
       qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["invoice_lines"] });
-      qc.invalidateQueries({ queryKey: ["journal_entries"] });
+      qc.invalidateQueries({ queryKey: ["journal-entries"] });
+      qc.invalidateQueries({ queryKey: ["journal-line-totals"] });
       toast({ title: editId ? "Invoice updated" : "Invoice created & posted" });
       setFormOpen(false);
       resetForm();
@@ -493,7 +494,8 @@ const Invoices = () => {
         .eq("id", paymentInvoiceId);
 
       qc.invalidateQueries({ queryKey: ["invoices"] });
-      qc.invalidateQueries({ queryKey: ["journal_entries"] });
+      qc.invalidateQueries({ queryKey: ["journal-entries"] });
+      qc.invalidateQueries({ queryKey: ["journal-line-totals"] });
       toast({ title: "Payment recorded", description: `Invoice ${inv.invoice_number} marked as paid` });
       setPaymentOpen(false);
       setPaymentInvoiceId(null);
@@ -525,8 +527,8 @@ const Invoices = () => {
         .eq("id", invoiceId);
 
       qc.invalidateQueries({ queryKey: ["invoices"] });
-      qc.invalidateQueries({ queryKey: ["journal_entries"] });
-      qc.invalidateQueries({ queryKey: ["journal_lines"] });
+      qc.invalidateQueries({ queryKey: ["journal-entries"] });
+      qc.invalidateQueries({ queryKey: ["journal-line-totals"] });
       toast({ title: "Invoice cancelled", description: `Invoice ${inv.invoice_number} cancelled and all journal entries deleted.` });
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });

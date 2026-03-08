@@ -1,25 +1,45 @@
 
+## Multi-Currency Support — IMPLEMENTED
 
-## Problem
+### Supported Currencies
+USD, EUR, AED (UAE Dirham), TRY (Turkish Lira), SAR (Saudi Riyal)
 
-There is a **query cache key mismatch** preventing the Journal Entries page from refreshing after invoice operations.
+### Database Changes ✅
+- `tenants.default_currency` (text, NOT NULL, default 'USD')
+- `journal_entries.currency` (text, NOT NULL, default 'USD')
+- `invoices.currency` (text, NOT NULL, default 'USD')
+- `bank_accounts.currency` already existed
 
-- **JournalEntries.tsx** uses query key: `["journal-entries", tenantId]` (hyphen)
-- **Invoices.tsx** invalidates: `["journal_entries"]` (underscore)
+### Shared Utility (`src/lib/utils.ts`) ✅
+- `SUPPORTED_CURRENCIES` constant with code, label, symbol
+- `formatCurrency(amount, currency, options?)` using `Intl.NumberFormat`
+- `CurrencyCode` type
 
-These don't match, so after creating an invoice (accrual entry) or recording a payment, the Journal Entries list never refreshes. The entries exist in the database but the UI shows stale data until a full page reload.
+### Tenant Context (`useTenant.tsx`) ✅
+- `defaultCurrency` exposed from tenant record
 
-## Fix
+### Settings (`DashboardSettings.tsx`) ✅
+- Default Currency dropdown in Organization section
 
-**Single file change: `src/pages/dashboard/Invoices.tsx`**
+### Form Currency Selectors ✅
+- **JournalEntryForm**: Currency dropdown, defaults to tenant currency, saves to `journal_entries.currency`
+- **Invoices**: Currency dropdown in create/edit dialog, saves to `invoices.currency`
+- **BankAccounts**: Select dropdown with all 5 currencies (replaced text input)
 
-Update all three `qc.invalidateQueries` calls that reference `"journal_entries"` to use `"journal-entries"` instead, matching the key used in JournalEntries.tsx. There are 3 locations:
+### Financial Statements ✅
+All reports use `formatCurrency(amount, defaultCurrency)`:
+- Balance Sheet, Income Statement, Cash Flow, Performance Analysis, Dashboard Overview
+- Chart of Accounts, Journal Entries, OCR Upload
+- Bank account balances display in account's own currency
 
-1. **Line ~427** (after `handleSave`): `queryKey: ["journal_entries"]` → `["journal-entries"]`
-2. **Line ~496** (after `handleRecordPayment`): `queryKey: ["journal_entries"]` → `["journal-entries"]`
-3. **Line ~528** (after `handleCancelInvoice`): `queryKey: ["journal_entries"]` → `["journal-entries"]`
+### Design Decision: Single-Currency Reporting
+- Financial statements report in tenant's default currency only
+- `currency` field on journal_entries/invoices is metadata for the transaction currency
+- Journal line debits/credits are always in the functional (reporting) currency
 
-Also update the `journal_lines` invalidation on line ~529 from `"journal_lines"` to `"journal-line-totals"` to match JournalEntries.tsx's key.
-
-This ensures the Journal Entries table refreshes immediately after any invoice operation.
-
+### Future Enhancements (out of scope)
+- Multi-currency FX rate table
+- Unrealized gain/loss calculations
+- Currency revaluation entries
+- Currency badge on mixed-currency views
+- Bank → Journal Entry currency validation on CSV import
