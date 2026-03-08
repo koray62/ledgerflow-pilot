@@ -628,7 +628,8 @@ const PerformanceAnalysis = () => {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview" className="space-y-4" ref={chartsRef}>
+      <div ref={chartsRef}>
+      <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="table">Detailed Table</TabsTrigger>
