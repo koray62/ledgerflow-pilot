@@ -955,28 +955,30 @@ const Invoices = () => {
                   flexDirection: "column",
                 }}
               >
-                {/* ── Header: logo + company vs INVOICE title ── */}
+                {/* ── Logo top-left ── */}
+                {tenantLogoUrl && (
+                  <div style={{ marginBottom: "16px" }}>
+                    <img
+                      src={tenantLogoUrl}
+                      alt="Company Logo"
+                      style={{ width: "180px", height: "180px", objectFit: "contain", borderRadius: "6px" }}
+                      crossOrigin="anonymous"
+                    />
+                  </div>
+                )}
+
+                {/* ── Header: company vs INVOICE title ── */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", borderBottom: "3px solid #1a1a2e", paddingBottom: "16px" }}>
-                  <div style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
-                    {tenantLogoUrl && (
-                      <img
-                        src={tenantLogoUrl}
-                        alt="Company Logo"
-                        style={{ width: "60px", height: "60px", objectFit: "contain", borderRadius: "6px" }}
-                        crossOrigin="anonymous"
-                      />
+                  <div>
+                    <h2 style={{ fontSize: "16pt", fontWeight: 700, margin: 0, color: "#1a1a2e" }}>
+                      {tenant?.name ?? "Company"}
+                    </h2>
+                    {tenant?.address && (
+                      <p style={{ margin: "2px 0 0", fontSize: "9pt", color: "#555" }}>{tenant.address}</p>
                     )}
-                    <div>
-                      <h2 style={{ fontSize: "16pt", fontWeight: 700, margin: 0, color: "#1a1a2e" }}>
-                        {tenant?.name ?? "Company"}
-                      </h2>
-                      {tenant?.address && (
-                        <p style={{ margin: "2px 0 0", fontSize: "9pt", color: "#555" }}>{tenant.address}</p>
-                      )}
-                      {tenant?.tax_id && (
-                        <p style={{ margin: "2px 0 0", fontSize: "9pt", color: "#555" }}>Tax ID: {tenant.tax_id}</p>
-                      )}
-                    </div>
+                    {tenant?.tax_id && (
+                      <p style={{ margin: "2px 0 0", fontSize: "9pt", color: "#555" }}>Tax ID: {tenant.tax_id}</p>
+                    )}
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <h3 style={{ fontSize: "22pt", fontWeight: 800, margin: 0, color: "#1a1a2e", letterSpacing: "2px" }}>
