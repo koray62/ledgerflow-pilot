@@ -8,7 +8,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermissions } from "@/hooks/usePermissions";
 import JournalEntryForm from "@/components/dashboard/JournalEntryForm";
@@ -167,7 +167,7 @@ const JournalEntries = () => {
                         return (
                           <tr key={entry.id} className="border-b border-border/50 transition-colors hover:bg-muted/50 cursor-pointer" onClick={() => { setEditEntryId(entry.id); setFormOpen(true); }}>
                             <td className="py-3 font-mono text-sm text-accent">{entry.entry_number}</td>
-                            <td className="py-3 font-mono text-sm text-muted-foreground">{entry.entry_date}</td>
+                            <td className="py-3 font-mono text-sm text-muted-foreground">{formatDisplayDate(entry.entry_date, defaultCurrency)}</td>
                             <td className="py-3 text-sm font-medium text-foreground">{entry.description}</td>
                             <td className="py-3 text-right font-mono text-sm text-foreground">{fmt(totals.debit)}</td>
                             <td className="py-3 text-right font-mono text-sm text-foreground">{fmt(totals.credit)}</td>
