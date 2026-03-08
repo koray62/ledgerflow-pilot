@@ -211,6 +211,14 @@ const CashFlow = () => {
       .reduce((s, l) => s + Number(l.credit) - Number(l.debit), 0);
   }, [isCashBasis, allPeriodLines, deferredRevAccountIds]);
 
+  const accrualTaxPayableChange = useMemo(() => {
+    if (isCashBasis) return 0;
+    const taxSet = new Set(taxPayableAccountIds);
+    // Change in Sales Tax Payable = net credit increase (credit-normal)
+    return allPeriodLines.filter(l => taxSet.has(l.account_id))
+      .reduce((s, l) => s + Number(l.credit) - Number(l.debit), 0);
+  }, [isCashBasis, allPeriodLines, taxPayableAccountIds]);
+
   // Monthly outflows from bills
   const { data: monthlyBurn = 0 } = useQuery({
     queryKey: ["cf-burn", tenantId, startStr, endStr],
