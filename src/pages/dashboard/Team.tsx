@@ -79,6 +79,7 @@ export default function Team() {
   const [editRole, setEditRole] = useState<AppRole>("viewer");
 
   const isOwner = currentUserRole === "owner";
+  const canManageTeam = can("team.manage");
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ["team-members", tenantId],
