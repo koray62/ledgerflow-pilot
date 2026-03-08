@@ -403,46 +403,78 @@ const Invoices = () => {
         const revenueAccountId =
           lines[0]?.account_id || revenueAccounts[0]?.id;
 
-        const journalLines: any[] = [
-          {
+        const journalLines: any[] = [];
+
+        if (accountingBasis === "accrual") {
+          /* Accrual basis: DR AR (total), CR Deferred Revenue (subtotal), CR VAT (tax) */
+          journalLines.push({
             journal_entry_id: je.id,
             tenant_id: tenantId,
             account_id: arAccount!.id,
             debit: totalAmount,
             credit: 0,
             description: `AR for Invoice ${invoiceNumber}`,
-          },
-        ];
-
-        /* group lines by account for revenue credits */
-        const accountGroups = new Map<string, number>();
-        for (const l of lines) {
-          const acctId = l.account_id || revenueAccountId;
-          if (acctId) {
-            accountGroups.set(acctId, (accountGroups.get(acctId) ?? 0) + l.amount);
+          });
+          if (deferredRevenueAccount) {
+            journalLines.push({
+              journal_entry_id: je.id,
+              tenant_id: tenantId,
+              account_id: deferredRevenueAccount.id,
+              debit: 0,
+              credit: subtotal,
+              description: `Deferred Revenue for Invoice ${invoiceNumber}`,
+            });
           }
-        }
-        for (const [acctId, amt] of accountGroups) {
+          if (vatAccount && taxAmount > 0) {
+            journalLines.push({
+              journal_entry_id: je.id,
+              tenant_id: tenantId,
+              account_id: vatAccount.id,
+              debit: 0,
+              credit: taxAmount,
+              description: `VAT for Invoice ${invoiceNumber}`,
+            });
+          }
+        } else {
+          /* Cash basis: DR AR (total), CR Revenue accounts, CR VAT */
           journalLines.push({
             journal_entry_id: je.id,
             tenant_id: tenantId,
-            account_id: acctId,
-            debit: 0,
-            credit: amt,
-            description: `Revenue for Invoice ${invoiceNumber}`,
+            account_id: arAccount!.id,
+            debit: totalAmount,
+            credit: 0,
+            description: `AR for Invoice ${invoiceNumber}`,
           });
-        }
 
-        /* VAT line */
-        if (vatAccount && taxAmount > 0) {
-          journalLines.push({
-            journal_entry_id: je.id,
-            tenant_id: tenantId,
-            account_id: vatAccount.id,
-            debit: 0,
-            credit: taxAmount,
-            description: `VAT for Invoice ${invoiceNumber}`,
-          });
+          const revenueAccountId = lines[0]?.account_id || revenueAccounts[0]?.id;
+          const accountGroups = new Map<string, number>();
+          for (const l of lines) {
+            const acctId = l.account_id || revenueAccountId;
+            if (acctId) {
+              accountGroups.set(acctId, (accountGroups.get(acctId) ?? 0) + l.amount);
+            }
+          }
+          for (const [acctId, amt] of accountGroups) {
+            journalLines.push({
+              journal_entry_id: je.id,
+              tenant_id: tenantId,
+              account_id: acctId,
+              debit: 0,
+              credit: amt,
+              description: `Revenue for Invoice ${invoiceNumber}`,
+            });
+          }
+
+          if (vatAccount && taxAmount > 0) {
+            journalLines.push({
+              journal_entry_id: je.id,
+              tenant_id: tenantId,
+              account_id: vatAccount.id,
+              debit: 0,
+              credit: taxAmount,
+              description: `VAT for Invoice ${invoiceNumber}`,
+            });
+          }
         }
 
         await supabase.from("journal_lines").insert(journalLines);
