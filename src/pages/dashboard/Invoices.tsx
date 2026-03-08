@@ -892,9 +892,9 @@ const Invoices = () => {
                 {/* ── Header: logo + company vs INVOICE title ── */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", borderBottom: "3px solid #1a1a2e", paddingBottom: "16px" }}>
                   <div style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
-                    {tenant?.logo_url && (
+                    {tenantLogoUrl && (
                       <img
-                        src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/tenant-documents/${tenant.logo_url}`}
+                        src={tenantLogoUrl}
                         alt="Company Logo"
                         style={{ width: "60px", height: "60px", objectFit: "contain", borderRadius: "6px" }}
                         crossOrigin="anonymous"
