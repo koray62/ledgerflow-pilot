@@ -319,6 +319,21 @@ const IncomeStatement = () => {
                             ))}
                         </tr>
                       ))}
+                      {/* Section total row */}
+                      <tr className="border-t border-border bg-muted/40">
+                        <td className="py-2.5 text-sm font-semibold text-foreground pl-2">
+                          Total {label}
+                        </td>
+                        <td className={`py-2.5 text-right font-mono text-sm font-bold pr-2 ${color}`}>
+                          {fmt(sectionTotal)}
+                        </td>
+                        {compareEnabled &&
+                          compBalances.map((cb, i) => (
+                            <td key={i} className="py-2.5 text-right font-mono text-sm font-semibold text-muted-foreground pr-2">
+                              {fmt(getSectionTotal(cb, type))}
+                            </td>
+                          ))}
+                      </tr>
                     </tbody>
                   </table>
                 )}
