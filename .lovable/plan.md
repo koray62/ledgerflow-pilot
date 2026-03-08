@@ -1,45 +1,33 @@
 
-## Multi-Currency Support — IMPLEMENTED
 
-### Supported Currencies
-USD, EUR, AED (UAE Dirham), TRY (Turkish Lira), SAR (Saudi Riyal)
+## Problem
 
-### Database Changes ✅
-- `tenants.default_currency` (text, NOT NULL, default 'USD')
-- `journal_entries.currency` (text, NOT NULL, default 'USD')
-- `invoices.currency` (text, NOT NULL, default 'USD')
-- `bank_accounts.currency` already existed
+Recurring forecast entries have **amount = 0** in the database. This is because the `JournalEntryForm` calculates the forecast amount as `debit - credit` across all lines (line 315), which always nets to zero for a balanced journal entry.
 
-### Shared Utility (`src/lib/utils.ts`) ✅
-- `SUPPORTED_CURRENCIES` constant with code, label, symbol
-- `formatCurrency(amount, currency, options?)` using `Intl.NumberFormat`
-- `CurrencyCode` type
+## Root Cause
 
-### Tenant Context (`useTenant.tsx`) ✅
-- `defaultCurrency` exposed from tenant record
+```typescript
+// JournalEntryForm.tsx line 315
+const netAmount = lineRows.reduce((s, l) => s + l.debit - l.credit, 0);
+// For a balanced entry: total debits == total credits → netAmount = 0
+```
 
-### Settings (`DashboardSettings.tsx`) ✅
-- Default Currency dropdown in Organization section
+## Fix
 
-### Form Currency Selectors ✅
-- **JournalEntryForm**: Currency dropdown, defaults to tenant currency, saves to `journal_entries.currency`
-- **Invoices**: Currency dropdown in create/edit dialog, saves to `invoices.currency`
-- **BankAccounts**: Select dropdown with all 5 currencies (replaced text input)
+The forecast amount should represent the **total expense or revenue value**, not the net of a balanced entry. The correct approach is to use the **total debits** (for expense entries) or **total credits** (for revenue entries) as the forecast amount:
 
-### Financial Statements ✅
-All reports use `formatCurrency(amount, defaultCurrency)`:
-- Balance Sheet, Income Statement, Cash Flow, Performance Analysis, Dashboard Overview
-- Chart of Accounts, Journal Entries, OCR Upload
-- Bank account balances display in account's own currency
+1. **In `JournalEntryForm.tsx`** — Replace the net calculation with:
+   - `totalDebit = sum of all debit values`
+   - `totalCredit = sum of all credit values`
+   - If `totalDebit >= totalCredit`: category is `expense`, amount = `totalDebit`
+   - Else: category is `revenue`, amount = `totalCredit`
 
-### Design Decision: Single-Currency Reporting
-- Financial statements report in tenant's default currency only
-- `currency` field on journal_entries/invoices is metadata for the transaction currency
-- Journal line debits/credits are always in the functional (reporting) currency
+2. **Fix existing data** — Run a migration to update the 3 existing forecast entries with zero amounts. We can recalculate from the linked journal entry's lines, or prompt the user to re-enter. Since we can't reliably link forecast entries back to journal entries (no FK), we'll need to either:
+   - Add a note that existing zero-amount entries need manual correction, OR
+   - Attempt to match by description/date and fix them
 
-### Future Enhancements (out of scope)
-- Multi-currency FX rate table
-- Unrealized gain/loss calculations
-- Currency revaluation entries
-- Currency badge on mixed-currency views
-- Bank → Journal Entry currency validation on CSV import
+## Plan
+
+- **Fix the formula** in `JournalEntryForm.tsx` line 315 so new recurring entries get the correct amount
+- **Display the amount column** in the CashFlow forecast table using `formatCurrency(Math.abs(entry.amount), currency)` so it shows properly even for negative values
+
