@@ -472,10 +472,23 @@ export default function BankAccounts() {
     }
   }, [suggestions, tenantId, importAccountId, user, toast, qc]);
 
+  const isReviewVisible = useCallback((s: AISuggestion) => {
+    const f = reviewFilters;
+    const low = (v: string) => v.toLowerCase();
+    if (f.status && !low(s.status).includes(low(f.status))) return false;
+    if (f.date && !s.originalTx.date.includes(f.date)) return false;
+    if (f.reference && !low(s.reference).includes(low(f.reference))) return false;
+    if (f.description && !low(s.description).includes(low(f.description))) return false;
+    if (f.debit && !low(accountName(s.debitAccountId)).includes(low(f.debit))) return false;
+    if (f.credit && !low(accountName(s.creditAccountId)).includes(low(f.credit))) return false;
+    if (f.amount && !String(s.amount).includes(f.amount)) return false;
+    return true;
+  }, [reviewFilters, chartAccounts]);
+
   const approveAll = async () => {
     setBulkApproving(true);
     for (let i = 0; i < suggestions.length; i++) {
-      if (suggestions[i].status === "pending") {
+      if (suggestions[i].status === "pending" && isReviewVisible(suggestions[i])) {
         await approveEntry(i);
       }
     }
