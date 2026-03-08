@@ -12,12 +12,11 @@ import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const formatCurrency = (val: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(val);
+import { formatCurrency as fmtCurrency } from "@/lib/utils";
 
 const DashboardOverview = () => {
-  const { tenantId } = useTenant();
+  const { tenantId, defaultCurrency } = useTenant();
+  const formatCurrencyVal = (val: number) => fmtCurrency(val, defaultCurrency, { minimumFractionDigits: 0 });
 
   // KPI: total cash from bank accounts
   const { data: cashBalance = 0 } = useQuery({
@@ -106,9 +105,9 @@ const DashboardOverview = () => {
   });
 
   const stats = [
-    { label: "Cash Balance", value: formatCurrency(cashBalance), icon: DollarSign, up: cashBalance >= 0 },
-    { label: "Accounts Receivable", value: formatCurrency(arTotal), icon: TrendingUp, up: true },
-    { label: "Accounts Payable", value: formatCurrency(apTotal), icon: TrendingDown, up: false },
+    { label: "Cash Balance", value: formatCurrencyVal(cashBalance), icon: DollarSign, up: cashBalance >= 0 },
+    { label: "Accounts Receivable", value: formatCurrencyVal(arTotal), icon: TrendingUp, up: true },
+    { label: "Accounts Payable", value: formatCurrencyVal(apTotal), icon: TrendingDown, up: false },
     { label: "Journal Entries", value: entryCount.toLocaleString(), icon: FileText, up: true },
   ];
 

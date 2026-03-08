@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
+import { formatCurrency } from "@/lib/utils";
 
 type AccountType = Database["public"]["Enums"]["account_type"];
 
@@ -86,7 +87,7 @@ function flattenTree(
 }
 
 const ChartOfAccounts = () => {
-  const { tenantId } = useTenant();
+  const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -289,8 +290,7 @@ const ChartOfAccounts = () => {
     });
   };
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Math.abs(n));
+  const fmt = (n: number) => formatCurrency(n, defaultCurrency, { abs: true });
 
   const resetForm = () => {
     setCode("");

@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/utils";
 
 const statusConfig: Record<string, { icon: typeof CheckCircle; colorClass: string; label: string }> = {
   uploaded: { icon: Clock, colorClass: "text-muted-foreground", label: "Queued" },
@@ -27,7 +28,7 @@ interface OCRUploadProps {
 }
 
 const OCRUpload = ({ onEditEntry }: OCRUploadProps) => {
-  const { tenantId } = useTenant();
+  const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -309,8 +310,7 @@ const OCRUpload = ({ onEditEntry }: OCRUploadProps) => {
     }
   }, [tenantId, user, queryClient]);
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+  const fmt = (n: number) => formatCurrency(n, defaultCurrency);
 
   const fmtSize = (bytes: number | null) => {
     if (!bytes) return "—";

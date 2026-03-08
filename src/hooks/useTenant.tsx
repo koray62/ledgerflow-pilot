@@ -6,6 +6,7 @@ interface TenantContextType {
   tenantId: string | null;
   tenantName: string | null;
   role: string | null;
+  defaultCurrency: string;
   loading: boolean;
 }
 
@@ -13,6 +14,7 @@ const TenantContext = createContext<TenantContextType>({
   tenantId: null,
   tenantName: null,
   role: null,
+  defaultCurrency: "USD",
   loading: true,
 });
 
@@ -21,6 +23,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantName, setTenantName] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,13 +31,13 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
       setTenantId(null);
       setTenantName(null);
       setRole(null);
+      setDefaultCurrency("USD");
       setLoading(false);
       return;
     }
 
     const fetchTenant = async () => {
       setLoading(true);
-      // Get the user's first tenant role
       const { data: utr } = await supabase
         .from("user_tenant_roles")
         .select("tenant_id, role")
@@ -49,11 +52,12 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
         const { data: tenant } = await supabase
           .from("tenants")
-          .select("name")
+          .select("name, default_currency")
           .eq("id", utr.tenant_id)
-          .maybeSingle();
+          .maybeSingle() as any;
 
         setTenantName(tenant?.name ?? null);
+        setDefaultCurrency(tenant?.default_currency ?? "USD");
       }
       setLoading(false);
     };
@@ -62,7 +66,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   }, [user]);
 
   return (
-    <TenantContext.Provider value={{ tenantId, tenantName, role, loading }}>
+    <TenantContext.Provider value={{ tenantId, tenantName, role, defaultCurrency, loading }}>
       {children}
     </TenantContext.Provider>
   );

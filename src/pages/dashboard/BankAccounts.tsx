@@ -29,7 +29,7 @@ import {
   Plus, Search, Pencil, Trash2, Upload, Loader2, Check, X, ExternalLink, CalendarIcon,
 } from "lucide-react";
 import { format, isAfter, isBefore, startOfDay } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency as fmtCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -64,8 +64,7 @@ interface AISuggestion {
 }
 
 /* ─── helpers ─── */
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+// fmt is now defined inside component to use defaultCurrency
 
 const DATE_FORMATS = [
   { value: "yyyy-mm-dd", label: "YYYY-MM-DD (2026-02-22)" },
@@ -150,7 +149,8 @@ function autoDetectColumns(headers: string[]) {
 /* ─────────────────────────────────── COMPONENT ─────────────────────────────────── */
 
 export default function BankAccounts() {
-  const { tenantId } = useTenant();
+  const { tenantId, defaultCurrency } = useTenant();
+  const fmt = (n: number) => fmtCurrency(n, defaultCurrency);
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -562,7 +562,7 @@ export default function BankAccounts() {
                       <TableCell className="font-mono">{a.account_number_last4 ? `••${a.account_number_last4}` : "—"}</TableCell>
                       <TableCell><Badge variant="secondary" className="capitalize">{a.account_type}</Badge></TableCell>
                       <TableCell>{a.currency}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(a.current_balance)}</TableCell>
+                      <TableCell className="text-right font-mono">{fmtCurrency(a.current_balance, a.currency)}</TableCell>
                       <TableCell className="text-right space-x-1">
                         <Button size="icon" variant="ghost" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" onClick={() => setDeleteId(a.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
@@ -969,7 +969,17 @@ export default function BankAccounts() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Currency</Label><Input value={formData.currency} onChange={(e) => setFormData({ ...formData, currency: e.target.value })} placeholder="USD" /></div>
+            <div>
+              <Label>Currency</Label>
+              <Select value={formData.currency} onValueChange={(v) => setFormData({ ...formData, currency: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_CURRENCIES.map((c) => (
+                    <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setFormOpen(false); resetForm(); }}>Cancel</Button>

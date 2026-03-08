@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { RotateCcw } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { useTenant } from "@/hooks/useTenant";
+import { formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { DateRangeFilter } from "@/components/dashboard/DateRangeFilter";
@@ -23,8 +24,7 @@ interface Account {
   parent_id: string | null;
 }
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Math.abs(n));
+// fmt is now defined inside component to use defaultCurrency
 
 const pctChange = (current: number, previous: number): string | null => {
   if (previous === 0) return current === 0 ? null : "+∞";
@@ -90,7 +90,8 @@ const computeBalances = (
 };
 
 const IncomeStatement = () => {
-  const { tenantId } = useTenant();
+  const { tenantId, defaultCurrency } = useTenant();
+  const fmt = (n: number) => formatCurrency(n, defaultCurrency, { abs: true });
   const [startDate, setStartDate] = useState<Date | undefined>(startOfYear(new Date()));
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
   const [compareEnabled, setCompareEnabled] = useState(false);

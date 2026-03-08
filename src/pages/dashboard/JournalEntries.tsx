@@ -8,6 +8,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrency } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import JournalEntryForm from "@/components/dashboard/JournalEntryForm";
 import OCRUpload from "./OCRUpload";
@@ -20,7 +21,7 @@ const statusColors: Record<string, string> = {
 };
 
 const JournalEntries = () => {
-  const { tenantId } = useTenant();
+  const { tenantId, defaultCurrency } = useTenant();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
@@ -86,9 +87,7 @@ const JournalEntries = () => {
       e.entry_number.toLowerCase().includes(search.toLowerCase())
   );
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-
+  const fmt = (n: number) => formatCurrency(n, defaultCurrency);
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-6 flex items-center justify-between">

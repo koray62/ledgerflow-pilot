@@ -12,6 +12,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { formatCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
 
 interface JournalLine {
   id?: string;
@@ -35,7 +36,7 @@ interface Props {
 }
 
 const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
-  const { tenantId } = useTenant();
+  const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -47,6 +48,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceInterval, setRecurrenceInterval] = useState("monthly");
   const [lines, setLines] = useState<JournalLine[]>([emptyLine(), emptyLine()]);
+  const [currency, setCurrency] = useState(defaultCurrency);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loadingEntry, setLoadingEntry] = useState(false);
@@ -111,7 +113,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
         const [entryRes, linesRes] = await Promise.all([
           supabase
             .from("journal_entries")
-            .select("entry_date, description, memo, status")
+            .select("entry_date, description, memo, status, currency")
             .eq("id", editEntryId)
             .eq("tenant_id", tenantId)
             .single(),
@@ -127,6 +129,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
           setEntryDate(entryRes.data.entry_date);
           setDescription(entryRes.data.description);
           setMemo(entryRes.data.memo || "");
+          setCurrency((entryRes.data as any).currency || defaultCurrency);
         }
 
         if (linesRes.data && linesRes.data.length > 0) {
@@ -162,6 +165,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
       setContactId("");
       setIsRecurring(false);
       setRecurrenceInterval("monthly");
+      setCurrency(defaultCurrency);
       setEntryDate(new Date().toISOString().split("T")[0]);
       setLines([emptyLine(), emptyLine()]);
       setErrors([]);
@@ -227,7 +231,8 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
             entry_date: entryDate,
             description: description.trim(),
             memo: memo.trim() || null,
-          })
+            currency,
+          } as any)
           .eq("id", editEntryId)
           .eq("tenant_id", tenantId);
 
@@ -274,9 +279,10 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
             entry_date: entryDate,
             description: description.trim(),
             memo: memo.trim() || null,
+            currency,
             status: "draft",
             created_by: user.id,
-          })
+          } as any)
           .select("id")
           .single();
 
@@ -341,8 +347,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
     }
   }, [tenantId, user, entryDate, description, memo, isRecurring, recurrenceInterval, lines, queryClient, onOpenChange, isEditMode, editEntryId]);
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+  const fmt = (n: number) => formatCurrency(n, defaultCurrency);
 
   // Group accounts by type
   const accountsByType = accounts.reduce<Record<string, typeof accounts>>((acc, a) => {
@@ -368,7 +373,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
         ) : (
           <div className="space-y-5">
             {/* Header fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="je-date" className="text-xs text-muted-foreground">Date</Label>
                 <Input
@@ -387,6 +392,19 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
                   onChange={(e) => setDescription(e.target.value)}
                   maxLength={200}
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Currency</Label>
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUPPORTED_CURRENCIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

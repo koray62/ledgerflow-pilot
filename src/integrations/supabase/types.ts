@@ -647,6 +647,7 @@ export type Database = {
           amount_paid: number
           created_at: string
           created_by: string | null
+          currency: string
           customer_id: string | null
           deleted_at: string | null
           due_date: string
@@ -667,6 +668,7 @@ export type Database = {
           amount_paid?: number
           created_at?: string
           created_by?: string | null
+          currency?: string
           customer_id?: string | null
           deleted_at?: string | null
           due_date: string
@@ -687,6 +689,7 @@ export type Database = {
           amount_paid?: number
           created_at?: string
           created_by?: string | null
+          currency?: string
           customer_id?: string | null
           deleted_at?: string | null
           due_date?: string
@@ -745,6 +748,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          currency: string
           deleted_at: string | null
           description: string
           entry_date: string
@@ -759,6 +763,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          currency?: string
           deleted_at?: string | null
           description: string
           entry_date?: string
@@ -773,6 +778,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          currency?: string
           deleted_at?: string | null
           description?: string
           entry_date?: string
@@ -998,6 +1004,7 @@ export type Database = {
         Row: {
           address: string | null
           created_at: string
+          default_currency: string
           deleted_at: string | null
           fiscal_year_end: number | null
           id: string
@@ -1011,6 +1018,7 @@ export type Database = {
         Insert: {
           address?: string | null
           created_at?: string
+          default_currency?: string
           deleted_at?: string | null
           fiscal_year_end?: number | null
           id?: string
@@ -1024,6 +1032,7 @@ export type Database = {
         Update: {
           address?: string | null
           created_at?: string
+          default_currency?: string
           deleted_at?: string | null
           fiscal_year_end?: number | null
           id?: string

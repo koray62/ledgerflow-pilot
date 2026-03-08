@@ -12,6 +12,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { SUPPORTED_CURRENCIES } from "@/lib/utils";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -25,6 +26,7 @@ const DashboardSettings = () => {
   const [name, setName] = useState("");
   const [industry, setIndustry] = useState("");
   const [fiscalYearEnd, setFiscalYearEnd] = useState("12");
+  const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const [address, setAddress] = useState("");
   const [taxId, setTaxId] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -51,6 +53,7 @@ const DashboardSettings = () => {
       setName(tenant.name ?? "");
       setIndustry(tenant.industry ?? "");
       setFiscalYearEnd(String(tenant.fiscal_year_end ?? 12));
+      setDefaultCurrency((tenant as any).default_currency ?? "USD");
       setAddress(tenant.address ?? "");
       setTaxId(tenant.tax_id ?? "");
       // Generate signed URL from stored path
@@ -139,6 +142,7 @@ const DashboardSettings = () => {
         name: name.trim(),
         industry: industry.trim() || null,
         fiscal_year_end: parseInt(fiscalYearEnd, 10),
+        default_currency: defaultCurrency,
         address: address.trim() || null,
         tax_id: taxId.trim() || null,
       } as any)
@@ -245,6 +249,21 @@ const DashboardSettings = () => {
                   <SelectContent>
                     {MONTHS.map((m, i) => (
                       <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Default Currency</Label>
+                <Select value={defaultCurrency} onValueChange={setDefaultCurrency}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUPPORTED_CURRENCIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.symbol} {c.code} — {c.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

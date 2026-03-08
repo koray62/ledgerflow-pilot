@@ -8,6 +8,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useTenant } from "@/hooks/useTenant";
+import { formatCurrency as fmtCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area,
@@ -29,8 +30,7 @@ interface Account {
   account_type: AccountType;
 }
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+// fmt is now defined inside component to use defaultCurrency
 
 const pctFmt = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
 
@@ -110,7 +110,8 @@ interface YearlyData {
 }
 
 const PerformanceAnalysis = () => {
-  const { tenantId, tenantName } = useTenant();
+  const { tenantId, tenantName, defaultCurrency } = useTenant();
+  const fmt = (n: number) => fmtCurrency(n, defaultCurrency, { maximumFractionDigits: 0 });
   const chartsRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
   const [drillYear, setDrillYear] = useState<number>(CURRENT_YEAR);

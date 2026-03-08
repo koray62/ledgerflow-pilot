@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
+import { formatCurrency as fmtCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,15 +53,15 @@ const statusColors: Record<string, string> = {
   cancelled: "bg-muted text-muted-foreground line-through",
 };
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+// fmt is now defined inside component to use defaultCurrency
 
 const TAX_RATE = 0.2;
 
 /* ═══════════════════════════ COMPONENT ═══════════════════════════ */
 const Invoices = () => {
-  const { tenantId } = useTenant();
+  const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
+  const fmt = (n: number) => fmtCurrency(n, defaultCurrency);
   const qc = useQueryClient();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -80,6 +81,7 @@ const Invoices = () => {
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<InvoiceLine[]>([emptyLine()]);
+  const [invoiceCurrency, setInvoiceCurrency] = useState(defaultCurrency);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -222,6 +224,7 @@ const Invoices = () => {
     setDueDate("");
     setNotes("");
     setLines([emptyLine()]);
+    setInvoiceCurrency(defaultCurrency);
     setErrors([]);
   };
 
@@ -237,6 +240,7 @@ const Invoices = () => {
     setCustomerId(inv.customer_id ?? "");
     setInvoiceDate(inv.invoice_date);
     setDueDate(inv.due_date);
+    setInvoiceCurrency((inv as any).currency ?? defaultCurrency);
     setNotes(inv.notes ?? "");
 
     const invLines = invoiceLines.filter((l: any) => l.invoice_id === id);
@@ -306,9 +310,10 @@ const Invoices = () => {
         subtotal,
         tax_amount: taxAmount,
         total_amount: totalAmount,
+        currency: invoiceCurrency,
         status: "sent" as const,
         created_by: user.id,
-      };
+      } as any;
 
       let invoiceId = editId;
       if (editId) {
@@ -705,6 +710,17 @@ const Invoices = () => {
             <div className="space-y-1.5">
               <Label>Due Date</Label>
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Currency</Label>
+              <Select value={invoiceCurrency} onValueChange={setInvoiceCurrency}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_CURRENCIES.map((c) => (
+                    <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Notes</Label>
