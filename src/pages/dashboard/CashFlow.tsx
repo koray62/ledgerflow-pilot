@@ -39,24 +39,29 @@ const CashFlow = () => {
     },
   });
 
-  // Derive cash account IDs (code 1000 and all descendants)
-  const cashAccountIds = (() => {
-    const cashParent = coaAccounts.find(a => a.account_type === "asset" && a.code === "1000");
-    if (!cashParent) return [];
+  // Helper: collect a parent and all descendants (children + grandchildren)
+  const collectDescendantIds = (parentCode: string, parentType: string) => {
+    const parent = coaAccounts.find(a => a.account_type === parentType && a.code === parentCode);
+    if (!parent) return [];
     const childIds = new Set(
-      coaAccounts.filter(a => a.parent_id === cashParent.id).map(a => a.id)
+      coaAccounts.filter(a => a.parent_id === parent.id).map(a => a.id)
     );
-    // Include children and grandchildren
     return coaAccounts
       .filter(a =>
-        a.id === cashParent.id ||
-        a.parent_id === cashParent.id ||
+        a.id === parent.id ||
+        a.parent_id === parent.id ||
         childIds.has(a.parent_id ?? "")
       )
       .map(a => a.id);
-  })();
+  };
 
-  // Compute cash balance from posted journal lines on cash accounts
+  // Derive cash account IDs (code 1000 and all descendants)
+  const cashAccountIds = collectDescendantIds("1000", "asset");
+
+  // Derive AP account IDs (code 2000 and all descendants)
+  const apAccountIds = collectDescendantIds("2000", "liability");
+
+  // Compute cash balance from journal lines on cash accounts
   const { data: cashBalance = 0 } = useQuery({
     queryKey: ["cf-cash", tenantId, cashAccountIds],
     enabled: !!tenantId && cashAccountIds.length > 0,
@@ -68,6 +73,21 @@ const CashFlow = () => {
         .in("account_id", cashAccountIds)
         .is("deleted_at", null);
       return data?.reduce((s, l) => s + Number(l.debit) - Number(l.credit), 0) ?? 0;
+    },
+  });
+
+  // Compute AP balance from journal lines (credit-normal: credits - debits = amount owed)
+  const { data: apBalance = 0 } = useQuery({
+    queryKey: ["cf-ap", tenantId, apAccountIds],
+    enabled: !!tenantId && apAccountIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("journal_lines")
+        .select("debit, credit")
+        .eq("tenant_id", tenantId!)
+        .in("account_id", apAccountIds)
+        .is("deleted_at", null);
+      return data?.reduce((s, l) => s + Number(l.credit) - Number(l.debit), 0) ?? 0;
     },
   });
 
@@ -132,7 +152,8 @@ const CashFlow = () => {
     },
   });
 
-  const runway = monthlyBurn > 0 ? cashBalance / monthlyBurn : null;
+  const netCashPosition = cashBalance - apBalance;
+  const runway = monthlyBurn > 0 ? netCashPosition / monthlyBurn : null;
   const showWarning = runway !== null && runway < 6;
 
   // Build 12-month forecast starting from current date
@@ -150,7 +171,7 @@ const CashFlow = () => {
       });
     }
 
-    let running = cashBalance;
+    let running = netCashPosition;
     return months.map((m) => {
       let inflow = 0;
       let outflow = 0;
@@ -192,7 +213,8 @@ const CashFlow = () => {
   const metrics = [
     { label: "Burn Rate (Period)", value: formatCurrency(monthlyBurn), icon: TrendingUp },
     { label: "Runway", value: runway !== null ? `${runway.toFixed(1)} months` : "N/A", icon: Clock },
-    { label: "Net Cash Position", value: formatCurrency(cashBalance), icon: DollarSign },
+    { label: "Net Cash Position", value: formatCurrency(netCashPosition), icon: DollarSign },
+    { label: "Accounts Payable", value: formatCurrency(apBalance), icon: AlertTriangle },
   ];
 
   return (
@@ -236,7 +258,7 @@ const CashFlow = () => {
         </div>
       )}
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((m, i) => (
           <Card key={i}>
             <CardContent className="flex items-center gap-4 p-5">
