@@ -84,7 +84,7 @@ const CashFlow = () => {
     [coaAccounts]
   );
 
-  // Compute cash balance from journal lines on cash accounts
+  // Compute total cash balance from journal lines on cash accounts (all time)
   const { data: cashBalance = 0 } = useQuery({
     queryKey: ["cf-cash", tenantId, cashAccountIds],
     enabled: !!tenantId && cashAccountIds.length > 0,
@@ -95,6 +95,22 @@ const CashFlow = () => {
         .eq("tenant_id", tenantId!)
         .in("account_id", cashAccountIds)
         .is("deleted_at", null);
+      return data?.reduce((s, l) => s + Number(l.debit) - Number(l.credit), 0) ?? 0;
+    },
+  });
+
+  // Compute opening cash balance = sum of all cash journal lines BEFORE the start date
+  const { data: openingCashBalance = 0 } = useQuery({
+    queryKey: ["cf-opening-cash", tenantId, cashAccountIds, startStr],
+    enabled: !!tenantId && cashAccountIds.length > 0 && !!startStr,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("journal_lines")
+        .select("debit, credit, journal_entries!inner(entry_date)")
+        .eq("tenant_id", tenantId!)
+        .in("account_id", cashAccountIds)
+        .is("deleted_at", null)
+        .lt("journal_entries.entry_date", startStr!);
       return data?.reduce((s, l) => s + Number(l.debit) - Number(l.credit), 0) ?? 0;
     },
   });
@@ -306,10 +322,10 @@ const CashFlow = () => {
     }
 
     const result: { month: string; inflow: number; outflow: number; balance: number }[] = [
-      { month: "Opening", inflow: 0, outflow: 0, balance: cashBalance },
+      { month: "Opening", inflow: 0, outflow: 0, balance: openingCashBalance },
     ];
 
-    let running = cashBalance;
+    let running = openingCashBalance;
     months.forEach((m) => {
       let inflow = 0;
       let outflow = 0;
