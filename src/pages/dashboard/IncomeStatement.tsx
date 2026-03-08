@@ -24,8 +24,6 @@ interface Account {
   parent_id: string | null;
 }
 
-// fmt is now defined inside component to use defaultCurrency
-
 const pctChange = (current: number, previous: number): string | null => {
   if (previous === 0) return current === 0 ? null : "+∞";
   const pct = ((current - previous) / Math.abs(previous)) * 100;
@@ -43,7 +41,8 @@ const PctBadge = ({ current, previous }: { current: number; previous: number }) 
   );
 };
 
-const fetchLineTotals = async (
+// Accrual mode: standard fetch of posted journal entry line totals
+const fetchAccrualLineTotals = async (
   tenantId: string,
   startStr?: string,
   endStr?: string
@@ -71,6 +70,79 @@ const fetchLineTotals = async (
   return data ?? [];
 };
 
+// Cash mode: only consider journal entries that touch cash accounts (1010/1000 descendants),
+// then attribute amounts to the counter-party revenue/expense accounts
+const fetchCashLineTotals = async (
+  tenantId: string,
+  cashAccountIds: string[],
+  excludeAccountIds: string[],
+  startStr?: string,
+  endStr?: string
+) => {
+  if (cashAccountIds.length === 0) return [];
+
+  // Get posted entries in date range
+  let query = supabase
+    .from("journal_entries")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("status", "posted")
+    .is("deleted_at", null);
+
+  if (startStr) query = query.gte("entry_date", startStr);
+  if (endStr) query = query.lte("entry_date", endStr);
+
+  const { data: entries } = await query;
+  if (!entries || entries.length === 0) return [];
+
+  const entryIds = entries.map((e) => e.id);
+
+  // Get ALL journal lines for those entries
+  const { data: allLines } = await supabase
+    .from("journal_lines")
+    .select("account_id, debit, credit, journal_entry_id")
+    .eq("tenant_id", tenantId)
+    .is("deleted_at", null)
+    .in("journal_entry_id", entryIds);
+
+  if (!allLines || allLines.length === 0) return [];
+
+  const cashIdSet = new Set(cashAccountIds);
+  const excludeSet = new Set(excludeAccountIds);
+
+  // Group lines by journal_entry_id
+  const linesByEntry = new Map<string, typeof allLines>();
+  for (const line of allLines) {
+    const existing = linesByEntry.get(line.journal_entry_id) ?? [];
+    existing.push(line);
+    linesByEntry.set(line.journal_entry_id, existing);
+  }
+
+  // For each entry that has at least one cash line, attribute the cash amount
+  // to the counter-party (non-cash, non-excluded) accounts
+  const syntheticTotals: { account_id: string; debit: number; credit: number }[] = [];
+
+  for (const [, entryLines] of linesByEntry) {
+    const hasCashLine = entryLines.some((l) => cashIdSet.has(l.account_id));
+    if (!hasCashLine) continue;
+
+    // Get counter-party lines (non-cash, non-excluded like AR/Deferred Revenue)
+    const counterLines = entryLines.filter(
+      (l) => !cashIdSet.has(l.account_id) && !excludeSet.has(l.account_id)
+    );
+
+    for (const cl of counterLines) {
+      syntheticTotals.push({
+        account_id: cl.account_id,
+        debit: Number(cl.debit),
+        credit: Number(cl.credit),
+      });
+    }
+  }
+
+  return syntheticTotals;
+};
+
 const computeBalances = (
   accounts: Account[],
   lineTotals: { account_id: string; debit: number; credit: number }[]
@@ -89,8 +161,12 @@ const computeBalances = (
   return map;
 };
 
+// Codes to exclude from Cash Basis P&L display
+const CASH_EXCLUDED_CODES = ["1100", "2200"];
+
 const IncomeStatement = () => {
-  const { tenantId, defaultCurrency } = useTenant();
+  const { tenantId, defaultCurrency, accountingBasis } = useTenant();
+  const isCashBasis = accountingBasis === "cash";
   const fmt = (n: number) => formatCurrency(n, defaultCurrency, { abs: true });
   const [startDate, setStartDate] = useState<Date | undefined>(startOfYear(new Date()));
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
@@ -99,8 +175,9 @@ const IncomeStatement = () => {
   const startStr = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
   const endStr = endDate ? format(endDate, "yyyy-MM-dd") : undefined;
 
-  const { data: accounts = [], isLoading: loadingAccounts } = useQuery({
-    queryKey: ["is-accounts", tenantId],
+  // Fetch all accounts (not just revenue/expense) so we can identify cash & excluded accounts
+  const { data: allAccounts = [], isLoading: loadingAllAccounts } = useQuery({
+    queryKey: ["is-all-accounts", tenantId],
     enabled: !!tenantId,
     queryFn: async () => {
       const { data } = await supabase
@@ -108,15 +185,55 @@ const IncomeStatement = () => {
         .select("id, code, name, account_type, parent_id")
         .eq("tenant_id", tenantId!)
         .is("deleted_at", null)
-        .in("account_type", ["revenue", "expense"])
         .order("code");
       return (data ?? []) as Account[];
     },
   });
 
+  const accounts = useMemo(
+    () => allAccounts.filter((a) => a.account_type === "revenue" || a.account_type === "expense"),
+    [allAccounts]
+  );
+
+  // In cash mode, filter out AR (1100) and Deferred Revenue (2200) accounts from display
+  const displayAccounts = useMemo(() => {
+    if (!isCashBasis) return accounts;
+    return accounts.filter((a) => !CASH_EXCLUDED_CODES.includes(a.code));
+  }, [accounts, isCashBasis]);
+
+  // Derive cash account IDs (code 1000 and all descendants)
+  const cashAccountIds = useMemo(() => {
+    const parent = allAccounts.find((a) => a.code === "1000" && a.account_type === "asset");
+    if (!parent) {
+      // Try 1010 directly
+      const direct = allAccounts.find((a) => a.code === "1010" && a.account_type === "asset");
+      return direct ? [direct.id] : [];
+    }
+    const childIds = new Set(allAccounts.filter((a) => a.parent_id === parent.id).map((a) => a.id));
+    return allAccounts
+      .filter((a) => a.id === parent.id || a.parent_id === parent.id || childIds.has(a.parent_id ?? ""))
+      .map((a) => a.id);
+  }, [allAccounts]);
+
+  // Excluded account IDs for cash mode (AR=1100, Deferred Revenue=2200)
+  const excludeAccountIds = useMemo(
+    () => allAccounts.filter((a) => CASH_EXCLUDED_CODES.includes(a.code)).map((a) => a.id),
+    [allAccounts]
+  );
+
+  const fetchLineTotals = useCallback(
+    (tId: string, s?: string, e?: string) => {
+      if (isCashBasis) {
+        return fetchCashLineTotals(tId, cashAccountIds, excludeAccountIds, s, e);
+      }
+      return fetchAccrualLineTotals(tId, s, e);
+    },
+    [isCashBasis, cashAccountIds, excludeAccountIds]
+  );
+
   const { data: lineTotals = [], isLoading: loadingLines } = useQuery({
-    queryKey: ["is-line-totals", tenantId, startStr, endStr],
-    enabled: !!tenantId,
+    queryKey: ["is-line-totals", tenantId, startStr, endStr, accountingBasis, cashAccountIds],
+    enabled: !!tenantId && !loadingAllAccounts,
     queryFn: () => fetchLineTotals(tenantId!, startStr, endStr),
   });
 
@@ -128,31 +245,31 @@ const IncomeStatement = () => {
   }));
 
   const { data: compLines1 = [] } = useQuery({
-    queryKey: ["is-line-totals", tenantId, compDates[0].start, compDates[0].end],
-    enabled: compareEnabled && !!tenantId,
+    queryKey: ["is-line-totals", tenantId, compDates[0].start, compDates[0].end, accountingBasis, cashAccountIds],
+    enabled: compareEnabled && !!tenantId && !loadingAllAccounts,
     queryFn: () => fetchLineTotals(tenantId!, compDates[0].start, compDates[0].end),
   });
   const { data: compLines2 = [] } = useQuery({
-    queryKey: ["is-line-totals", tenantId, compDates[1].start, compDates[1].end],
-    enabled: compareEnabled && !!tenantId,
+    queryKey: ["is-line-totals", tenantId, compDates[1].start, compDates[1].end, accountingBasis, cashAccountIds],
+    enabled: compareEnabled && !!tenantId && !loadingAllAccounts,
     queryFn: () => fetchLineTotals(tenantId!, compDates[1].start, compDates[1].end),
   });
   const { data: compLines3 = [] } = useQuery({
-    queryKey: ["is-line-totals", tenantId, compDates[2].start, compDates[2].end],
-    enabled: compareEnabled && !!tenantId,
+    queryKey: ["is-line-totals", tenantId, compDates[2].start, compDates[2].end, accountingBasis, cashAccountIds],
+    enabled: compareEnabled && !!tenantId && !loadingAllAccounts,
     queryFn: () => fetchLineTotals(tenantId!, compDates[2].start, compDates[2].end),
   });
 
-  const isLoading = loadingAccounts || loadingLines;
+  const isLoading = loadingAllAccounts || loadingLines;
 
-  const ownBalances = useMemo(() => computeBalances(accounts, lineTotals), [accounts, lineTotals]);
+  const ownBalances = useMemo(() => computeBalances(displayAccounts, lineTotals), [displayAccounts, lineTotals]);
 
   const compBalances = useMemo(() => {
     if (!compareEnabled) return [];
     return [compLines1, compLines2, compLines3].map((lines) =>
-      computeBalances(accounts, lines)
+      computeBalances(displayAccounts, lines)
     );
-  }, [compareEnabled, accounts, compLines1, compLines2, compLines3]);
+  }, [compareEnabled, displayAccounts, compLines1, compLines2, compLines3]);
 
   const sections: { type: AccountType; label: string; color: string }[] = [
     { type: "revenue", label: "Revenue", color: "text-emerald-400" },
@@ -160,7 +277,7 @@ const IncomeStatement = () => {
   ];
 
   const buildTree = (type: AccountType) => {
-    const typeAccounts = accounts.filter((a) => a.account_type === type);
+    const typeAccounts = displayAccounts.filter((a) => a.account_type === type);
     const roots = typeAccounts.filter(
       (a) => !a.parent_id || !typeAccounts.some((p) => p.id === a.parent_id)
     );
@@ -195,7 +312,7 @@ const IncomeStatement = () => {
   };
 
   const getBalanceForAccount = (balMap: Record<string, number>, accountId: string, type: AccountType) => {
-    const typeAccounts = accounts.filter((a) => a.account_type === type);
+    const typeAccounts = displayAccounts.filter((a) => a.account_type === type);
     const kids = typeAccounts.filter((a) => a.parent_id === accountId);
     if (kids.length > 0) {
       return kids.reduce((s, k) => s + (balMap[k.id] ?? 0), 0) + (balMap[accountId] ?? 0);
@@ -204,7 +321,7 @@ const IncomeStatement = () => {
   };
 
   const getSectionTotal = (balMap: Record<string, number>, type: AccountType) =>
-    accounts.filter((a) => a.account_type === type).reduce((s, a) => s + (balMap[a.id] ?? 0), 0);
+    displayAccounts.filter((a) => a.account_type === type).reduce((s, a) => s + (balMap[a.id] ?? 0), 0);
 
   const sectionTotals = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -212,7 +329,7 @@ const IncomeStatement = () => {
       totals[type] = getSectionTotal(ownBalances, type);
     }
     return totals;
-  }, [accounts, ownBalances]);
+  }, [displayAccounts, ownBalances]);
 
   const totalRevenue = sectionTotals["revenue"] ?? 0;
   const totalExpenses = sectionTotals["expense"] ?? 0;
@@ -252,6 +369,9 @@ const IncomeStatement = () => {
           <p className="text-sm text-muted-foreground">{subtitle} · Posted entries only</p>
         </div>
         <div className="flex items-center gap-3">
+          <Badge variant="outline" className="text-xs">
+            {isCashBasis ? "Cash Basis" : "Accrual Basis"}
+          </Badge>
           <DateRangeFilter
             startDate={startDate}
             endDate={endDate}
