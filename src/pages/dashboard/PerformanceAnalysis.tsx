@@ -628,7 +628,7 @@ const PerformanceAnalysis = () => {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs defaultValue="overview" className="space-y-4" ref={chartsRef}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="table">Detailed Table</TabsTrigger>
@@ -637,7 +637,7 @@ const PerformanceAnalysis = () => {
 
         {/* Tab 1: Overview Charts */}
         <TabsContent value="overview" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div data-pdf="overview" className="grid gap-6 lg:grid-cols-2">
             {/* Revenue vs Expenses */}
             <Card>
               <CardHeader className="pb-2">
