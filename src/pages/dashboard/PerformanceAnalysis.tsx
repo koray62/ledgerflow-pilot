@@ -347,9 +347,6 @@ const PerformanceAnalysis = () => {
     },
   ];
 
-  // PDF Export
-  const chartsRef = useRef<HTMLDivElement>(null);
-  const [exporting, setExporting] = useState(false);
 
   const handleExportPDF = useCallback(async () => {
     setExporting(true);
