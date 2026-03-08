@@ -224,6 +224,7 @@ const Invoices = () => {
     setDueDate("");
     setNotes("");
     setLines([emptyLine()]);
+    setInvoiceCurrency(defaultCurrency);
     setErrors([]);
   };
 
@@ -239,6 +240,7 @@ const Invoices = () => {
     setCustomerId(inv.customer_id ?? "");
     setInvoiceDate(inv.invoice_date);
     setDueDate(inv.due_date);
+    setInvoiceCurrency((inv as any).currency ?? defaultCurrency);
     setNotes(inv.notes ?? "");
 
     const invLines = invoiceLines.filter((l: any) => l.invoice_id === id);
@@ -708,6 +710,17 @@ const Invoices = () => {
             <div className="space-y-1.5">
               <Label>Due Date</Label>
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Currency</Label>
+              <Select value={invoiceCurrency} onValueChange={setInvoiceCurrency}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_CURRENCIES.map((c) => (
+                    <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Notes</Label>
