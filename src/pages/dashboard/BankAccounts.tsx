@@ -43,6 +43,7 @@ type ChartAccount = Tables<"chart_of_accounts">;
 interface ParsedTx {
   date: string;
   description: string;
+  detailedDescription?: string;
   amount: number;
 }
 
@@ -141,11 +142,12 @@ function parseCSV(text: string): { headers: string[]; rows: string[][] } {
 function autoDetectColumns(headers: string[]) {
   const lower = headers.map((h) => h.toLowerCase());
   const dateIdx = lower.findIndex((h) => /date/.test(h));
-  const descIdx = lower.findIndex((h) => /desc|narr|memo|detail|particular/.test(h));
+  const descIdx = lower.findIndex((h) => /desc|narr|memo|particular/.test(h));
+  const detailDescIdx = lower.findIndex((h, i) => i !== descIdx && /detail.*desc|full.*desc|remarks|additional/.test(h));
   const amtIdx = lower.findIndex((h) => /amount|sum|value/.test(h));
   const debitIdx = lower.findIndex((h) => /debit|withdrawal|dr/.test(h));
   const creditIdx = lower.findIndex((h) => /credit|deposit|cr/.test(h));
-  return { dateIdx, descIdx, amtIdx, debitIdx, creditIdx };
+  return { dateIdx, descIdx, detailDescIdx, amtIdx, debitIdx, creditIdx };
 }
 
 /* ─────────────────────────────────── COMPONENT ─────────────────────────────────── */
@@ -172,7 +174,7 @@ export default function BankAccounts() {
   // Import state
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<string[][]>([]);
-  const [colMap, setColMap] = useState<{ dateIdx: number; descIdx: number; amtIdx: number; debitIdx: number; creditIdx: number }>({ dateIdx: -1, descIdx: -1, amtIdx: -1, debitIdx: -1, creditIdx: -1 });
+  const [colMap, setColMap] = useState<{ dateIdx: number; descIdx: number; detailDescIdx: number; amtIdx: number; debitIdx: number; creditIdx: number }>({ dateIdx: -1, descIdx: -1, detailDescIdx: -1, amtIdx: -1, debitIdx: -1, creditIdx: -1 });
   const [dateFormat, setDateFormat] = useState("yyyy-mm-dd");
   const [parsedTxs, setParsedTxs] = useState<ParsedTx[]>([]);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
@@ -386,7 +388,8 @@ export default function BankAccounts() {
         const cr = parseFloat(r[colMap.creditIdx]?.replace(/[^0-9.\-]/g, "") || "0");
         amount = cr - dr;
       }
-      return { date: convertDate(r[colMap.dateIdx] || "", dateFormat), description: r[colMap.descIdx] || "", amount };
+      const detailedDescription = colMap.detailDescIdx >= 0 ? (r[colMap.detailDescIdx] || "").trim() : undefined;
+      return { date: convertDate(r[colMap.dateIdx] || "", dateFormat), description: r[colMap.descIdx] || "", detailedDescription: detailedDescription || undefined, amount };
     }).filter((t) => t.description || t.amount);
     setParsedTxs(txs);
   };
@@ -396,8 +399,14 @@ export default function BankAccounts() {
     if (!parsedTxs.length || !chartAccounts.length) return;
     setAiLoading(true);
     try {
+      // Merge detailed description for AI context, but keep parsedTxs unchanged for storage
+      const txsForAI = parsedTxs.map(tx => ({
+        date: tx.date,
+        description: tx.detailedDescription ? `${tx.description} | ${tx.detailedDescription}` : tx.description,
+        amount: tx.amount,
+      }));
       const { data, error } = await supabase.functions.invoke("process-bank-csv", {
-        body: { transactions: parsedTxs, accounts: chartAccounts, vendors, customers },
+        body: { transactions: txsForAI, accounts: chartAccounts, vendors, customers },
       });
       if (error) throw error;
       const sug: AISuggestion[] = (data.suggestions || []).map((s: any) => ({
@@ -735,6 +744,16 @@ export default function BankAccounts() {
                         <Select value={String(colMap.amtIdx)} onValueChange={(v) => setColMap({ ...colMap, amtIdx: Number(v) })}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>{csvHeaders.map((h, i) => <SelectItem key={i} value={String(i)}>{h}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Detailed Description (Optional)</Label>
+                        <Select value={String(colMap.detailDescIdx)} onValueChange={(v) => setColMap({ ...colMap, detailDescIdx: Number(v) })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="-1">None</SelectItem>
+                            {csvHeaders.map((h, i) => <SelectItem key={i} value={String(i)}>{h}</SelectItem>)}
+                          </SelectContent>
                         </Select>
                       </div>
                     </div>
