@@ -43,6 +43,7 @@ type ChartAccount = Tables<"chart_of_accounts">;
 interface ParsedTx {
   date: string;
   description: string;
+  detailedDescription?: string;
   amount: number;
 }
 
