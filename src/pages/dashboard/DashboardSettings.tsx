@@ -53,7 +53,23 @@ const DashboardSettings = () => {
       setFiscalYearEnd(String(tenant.fiscal_year_end ?? 12));
       setAddress(tenant.address ?? "");
       setTaxId(tenant.tax_id ?? "");
-      setLogoUrl(tenant.logo_url ?? null);
+      // Generate signed URL from stored path
+      const storedLogo = tenant.logo_url as string | null;
+      if (storedLogo) {
+        // If it's already a full URL (legacy), try to extract path; otherwise use as path
+        const path = storedLogo.includes("/storage/v1/")
+          ? storedLogo.split("/tenant-documents/").pop() ?? storedLogo
+          : storedLogo;
+        supabase.storage
+          .from("tenant-documents")
+          .createSignedUrl(path, 3600)
+          .then(({ data }) => {
+            if (data?.signedUrl) setLogoUrl(data.signedUrl);
+            else setLogoUrl(null);
+          });
+      } else {
+        setLogoUrl(null);
+      }
     }
   }, [tenant]);
 
