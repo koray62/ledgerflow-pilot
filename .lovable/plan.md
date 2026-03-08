@@ -1,34 +1,25 @@
 
 
-## Add YoY Percentage Change Indicators
+## Problem
 
-### Overview
-Show a small percentage change badge below each comparison year's amount, comparing it to the previous year's value (i.e., each year compared to the year before it).
+In the "Review & Approve Journal Entries" table, the Amount column shows plain numbers (e.g., `50000`, `4.22`, `308.3`) without any sign indicator. Since journal entries always use absolute amounts (debit/credit accounts indicate direction), users can't tell at a glance whether the original transaction was an inflow or outflow.
 
-### Logic
-Add a helper function:
-```typescript
-const pctChange = (current: number, previous: number): string | null => {
-  if (previous === 0) return current === 0 ? null : "+∞";
-  const pct = ((current - previous) / Math.abs(previous)) * 100;
-  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
-};
-```
+## Solution
 
-For each comparison column, compute the % change relative to the column to its left (current year vs year-1, year-1 vs year-2, year-2 vs year-3).
+Enhance the Amount column in the suggestions review table to clearly indicate the direction of the original transaction:
 
-### Display
-Below each dollar amount in comparison columns, render a small colored label:
-- Green for positive change, red for negative change
-- `text-[10px]` size, no extra row — just a `<div>` under the amount in the same `<td>`
+1. **Color coding**: Green for inflows (credits/positive original amounts), red for outflows (debits/negative original amounts)
+2. **Prefix indicators**: Show `▲` or `+` for inflows and `▼` or `−` for outflows next to the amount
+3. **Apply to both states**: The pending (editable input) and approved (read-only span) views should both show the direction indicator
 
-### Changes in `src/pages/dashboard/IncomeStatement.tsx`
+### Technical approach
 
-1. **Add `pctChange` helper** — returns formatted string or null when both values are zero.
+- Each suggestion object already has `originalTx.amount` which preserves the sign from the CSV. Use this to determine direction.
+- For the **read-only** display: format with color + arrow prefix based on `originalTx.amount` sign
+- For the **editable input**: add a colored badge/label next to the input showing the direction (e.g., a small "IN" or "OUT" badge), since the input itself shows the absolute journal amount
+- Apply similar treatment to the raw transaction preview table (line ~547) which already has color but could benefit from clearer `+`/`-` prefixes
 
-2. **Account rows** — In each comparison `<td>`, after the amount `<span>`, add a small `<div>` showing the % change. The "reference" value chain: current year → compBalances[0] → compBalances[1] → compBalances[2]. So compBalances[0] compares against current, compBalances[1] against compBalances[0], etc.
+### Files to change
 
-3. **Section total rows** — Same treatment for section totals.
-
-4. **Summary card** — Same treatment for Total Revenue, Total Expenses, and Net Income rows.
+- `src/pages/dashboard/BankAccounts.tsx` — Update the Amount cells in both the transaction preview table and the journal entry review table to include direction indicators and consistent color coding
 
