@@ -310,21 +310,25 @@ const ContactList = ({ type }: ContactListProps) => {
                   <td className="px-4 py-3 text-right text-muted-foreground hidden lg:table-cell">{item.payment_terms ?? 30}d</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}>
-                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => handleDelete(item.id)}
-                        disabled={deletingId === item.id}
-                      >
-                        {deletingId === item.id
-                          ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                          : <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        }
-                      </Button>
+                      {can("contacts.edit") && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}>
+                          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      )}
+                      {can("contacts.delete") && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleDelete(item.id)}
+                          disabled={deletingId === item.id}
+                        >
+                          {deletingId === item.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            : <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          }
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
