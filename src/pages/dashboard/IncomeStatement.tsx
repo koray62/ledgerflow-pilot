@@ -325,17 +325,19 @@ const IncomeStatement = () => {
                             ) : (
                               <span className="text-muted-foreground">{fmt(balance)}</span>
                             )}
+                            {compareEnabled && compBalances.length > 0 && (
+                              <PctBadge current={balance} previous={getBalanceForAccount(compBalances[0], account.id, account.account_type)} />
+                            )}
                           </td>
                           {compareEnabled &&
                             compBalances.map((cb, i) => {
                               const val = getBalanceForAccount(cb, account.id, account.account_type);
-                              const prevVal = i === 0
-                                ? balance
-                                : getBalanceForAccount(compBalances[i - 1], account.id, account.account_type);
                               return (
                                 <td key={i} className="py-2.5 text-right font-mono text-sm pr-2">
                                   <span className="text-muted-foreground">{fmt(val)}</span>
-                                  <PctBadge current={val} previous={prevVal} />
+                                  {i < compBalances.length - 1 && (
+                                    <PctBadge current={val} previous={getBalanceForAccount(compBalances[i + 1], account.id, account.account_type)} />
+                                  )}
                                 </td>
                               );
                             })}
@@ -348,15 +350,19 @@ const IncomeStatement = () => {
                         </td>
                         <td className={`py-2.5 text-right font-mono text-sm font-bold pr-2 ${color}`}>
                           {fmt(sectionTotal)}
+                          {compareEnabled && compBalances.length > 0 && (
+                            <PctBadge current={sectionTotal} previous={getSectionTotal(compBalances[0], type)} />
+                          )}
                         </td>
                         {compareEnabled &&
                           compBalances.map((cb, i) => {
                             const val = getSectionTotal(cb, type);
-                            const prevVal = i === 0 ? sectionTotal : getSectionTotal(compBalances[i - 1], type);
                             return (
                               <td key={i} className="py-2.5 text-right font-mono text-sm font-semibold text-muted-foreground pr-2">
                                 {fmt(val)}
-                                <PctBadge current={val} previous={prevVal} />
+                                {i < compBalances.length - 1 && (
+                                  <PctBadge current={val} previous={getSectionTotal(compBalances[i + 1], type)} />
+                                )}
                               </td>
                             );
                           })}
@@ -386,28 +392,36 @@ const IncomeStatement = () => {
                 <tbody>
                   <tr className="border-b border-border/30">
                     <td className="py-2 text-sm text-muted-foreground">Total Revenue</td>
-                    <td className="py-2 text-right font-mono text-sm font-semibold text-foreground pr-2">{fmt(totalRevenue)}</td>
+                    <td className="py-2 text-right font-mono text-sm font-semibold text-foreground pr-2">
+                      {fmt(totalRevenue)}
+                      {compBalances.length > 0 && <PctBadge current={totalRevenue} previous={getSectionTotal(compBalances[0], "revenue")} />}
+                    </td>
                     {compBalances.map((cb, i) => {
                       const val = getSectionTotal(cb, "revenue");
-                      const prevVal = i === 0 ? totalRevenue : getSectionTotal(compBalances[i - 1], "revenue");
                       return (
                         <td key={i} className="py-2 text-right font-mono text-sm text-muted-foreground pr-2">
                           {fmt(val)}
-                          <PctBadge current={val} previous={prevVal} />
+                          {i < compBalances.length - 1 && (
+                            <PctBadge current={val} previous={getSectionTotal(compBalances[i + 1], "revenue")} />
+                          )}
                         </td>
                       );
                     })}
                   </tr>
                   <tr className="border-b border-border/30">
                     <td className="py-2 text-sm text-muted-foreground">Total Expenses</td>
-                    <td className="py-2 text-right font-mono text-sm font-semibold text-foreground pr-2">{fmt(totalExpenses)}</td>
+                    <td className="py-2 text-right font-mono text-sm font-semibold text-foreground pr-2">
+                      {fmt(totalExpenses)}
+                      {compBalances.length > 0 && <PctBadge current={totalExpenses} previous={getSectionTotal(compBalances[0], "expense")} />}
+                    </td>
                     {compBalances.map((cb, i) => {
                       const val = getSectionTotal(cb, "expense");
-                      const prevVal = i === 0 ? totalExpenses : getSectionTotal(compBalances[i - 1], "expense");
                       return (
                         <td key={i} className="py-2 text-right font-mono text-sm text-muted-foreground pr-2">
                           {fmt(val)}
-                          <PctBadge current={val} previous={prevVal} />
+                          {i < compBalances.length - 1 && (
+                            <PctBadge current={val} previous={getSectionTotal(compBalances[i + 1], "expense")} />
+                          )}
                         </td>
                       );
                     })}
@@ -416,18 +430,22 @@ const IncomeStatement = () => {
                     <td className="py-2 text-sm font-semibold text-foreground">Net Income</td>
                     <td className={`py-2 text-right font-mono text-sm font-bold pr-2 ${netIncome >= 0 ? "text-success" : "text-destructive"}`}>
                       {netIncome < 0 && "("}{fmt(netIncome)}{netIncome < 0 && ")"}
+                      {compBalances.length > 0 && (() => {
+                        const prevNet = getSectionTotal(compBalances[0], "revenue") - getSectionTotal(compBalances[0], "expense");
+                        return <PctBadge current={netIncome} previous={prevNet} />;
+                      })()}
                     </td>
                     {compBalances.map((cb, i) => {
                       const rev = getSectionTotal(cb, "revenue");
                       const exp = getSectionTotal(cb, "expense");
                       const net = rev - exp;
-                      const prevNet = i === 0
-                        ? netIncome
-                        : getSectionTotal(compBalances[i - 1], "revenue") - getSectionTotal(compBalances[i - 1], "expense");
                       return (
                         <td key={i} className={`py-2 text-right font-mono text-sm pr-2 ${net >= 0 ? "text-success" : "text-destructive"}`}>
                           {net < 0 && "("}{fmt(net)}{net < 0 && ")"}
-                          <PctBadge current={net} previous={prevNet} />
+                          {i < compBalances.length - 1 && (() => {
+                            const prevNet = getSectionTotal(compBalances[i + 1], "revenue") - getSectionTotal(compBalances[i + 1], "expense");
+                            return <PctBadge current={net} previous={prevNet} />;
+                          })()}
                         </td>
                       );
                     })}
