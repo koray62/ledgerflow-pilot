@@ -562,7 +562,7 @@ export default function BankAccounts() {
                       <TableCell className="font-mono">{a.account_number_last4 ? `••${a.account_number_last4}` : "—"}</TableCell>
                       <TableCell><Badge variant="secondary" className="capitalize">{a.account_type}</Badge></TableCell>
                       <TableCell>{a.currency}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(a.current_balance)}</TableCell>
+                      <TableCell className="text-right font-mono">{fmtCurrency(a.current_balance, a.currency)}</TableCell>
                       <TableCell className="text-right space-x-1">
                         <Button size="icon" variant="ghost" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" onClick={() => setDeleteId(a.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
