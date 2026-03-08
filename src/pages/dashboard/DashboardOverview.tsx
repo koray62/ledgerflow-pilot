@@ -254,6 +254,7 @@ const DashboardOverview = () => {
     <div className="p-6 lg:p-8 space-y-6">
       {/* Header */}
       <div>
+        {tenantName && <p className="text-sm font-medium text-muted-foreground mb-0.5">{tenantName}</p>}
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-sm text-muted-foreground">Welcome back. Here's your financial overview.</p>
       </div>
