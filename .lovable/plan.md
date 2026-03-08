@@ -1,25 +1,45 @@
 
 
-## Problem
+## Add Date Range Filters to Financial Reports
 
-In the "Review & Approve Journal Entries" table, the Amount column shows plain numbers (e.g., `50000`, `4.22`, `308.3`) without any sign indicator. Since journal entries always use absolute amounts (debit/credit accounts indicate direction), users can't tell at a glance whether the original transaction was an inflow or outflow.
+### Overview
+Add "From" and "To" date pickers to the Balance Sheet, Income Statement, and Cash Flow pages so users can filter data by date range. The Balance Sheet uses an "As of" date (single date), while Income Statement and Cash Flow use a date range.
 
-## Solution
+### Approach
 
-Enhance the Amount column in the suggestions review table to clearly indicate the direction of the original transaction:
+Create a reusable `DateRangeFilter` component with two date pickers (From/To) using the existing Shadcn Calendar + Popover pattern. Each report page will add this filter in its header area and pass the dates into queries.
 
-1. **Color coding**: Green for inflows (credits/positive original amounts), red for outflows (debits/negative original amounts)
-2. **Prefix indicators**: Show `▲` or `+` for inflows and `▼` or `−` for outflows next to the amount
-3. **Apply to both states**: The pending (editable input) and approved (read-only span) views should both show the direction indicator
+### Changes
 
-### Technical approach
+**1. New component: `src/components/dashboard/DateRangeFilter.tsx`**
+- Two date pickers (From / To) using Popover + Calendar with `pointer-events-auto`
+- Props: `startDate`, `endDate`, `onStartDateChange`, `onEndDateChange`
+- Compact inline layout that fits in the page header
 
-- Each suggestion object already has `originalTx.amount` which preserves the sign from the CSV. Use this to determine direction.
-- For the **read-only** display: format with color + arrow prefix based on `originalTx.amount` sign
-- For the **editable input**: add a colored badge/label next to the input showing the direction (e.g., a small "IN" or "OUT" badge), since the input itself shows the absolute journal amount
-- Apply similar treatment to the raw transaction preview table (line ~547) which already has color but could benefit from clearer `+`/`-` prefixes
+**2. `src/pages/dashboard/BalanceSheet.tsx`**
+- Add state: `asOfDate` (defaults to today)
+- Render a single date picker labeled "As of" in the header
+- Filter journal entries query: `.lte("entry_date", asOfDate)` so only entries on or before that date are included
+- Update query keys to include the date
+- Update subtitle text to show selected date
 
-### Files to change
+**3. `src/pages/dashboard/IncomeStatement.tsx`**
+- Add state: `startDate` (default: start of current fiscal year or Jan 1) and `endDate` (default: today)
+- Render `DateRangeFilter` in the header
+- Filter journal entries query: `.gte("entry_date", startDate).lte("entry_date", endDate)`
+- Update query keys to include dates
+- Update subtitle text
 
-- `src/pages/dashboard/BankAccounts.tsx` — Update the Amount cells in both the transaction preview table and the journal entry review table to include direction indicators and consistent color coding
+**4. `src/pages/dashboard/CashFlow.tsx`**
+- Add state: `startDate` and `endDate` for the historical burn rate calculation
+- Render `DateRangeFilter` in the header
+- Filter bills query for burn rate by the selected date range
+- Filter invoices/bills for the forecast starting point
+- Update query keys to include dates
+
+### Technical Notes
+- The journal entries table has an `entry_date` column (type `date`) which is the correct field to filter on
+- Bills have `bill_date` and `due_date`; invoices have `invoice_date` and `due_date`
+- Uses `date-fns` `format` for formatting dates to ISO strings for queries
+- Calendar component needs `pointer-events-auto` class per Shadcn guidance
 
