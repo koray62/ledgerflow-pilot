@@ -91,7 +91,7 @@ const Invoices = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invoices")
-        .select("*, customers(name, email, address)")
+        .select("*, customers(name, email, address, tax_id, phone)")
         .eq("tenant_id", tenantId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
@@ -246,13 +246,15 @@ const Invoices = () => {
 
   /* ─── generate next invoice number ─── */
   const nextInvoiceNumber = () => {
+    const year = new Date().getFullYear();
+    const prefix = `${year}-INV-`;
     const nums = invoices
       .map((i) => {
         const m = i.invoice_number.match(/(\d+)$/);
         return m ? parseInt(m[1]) : 0;
       });
     const max = nums.length > 0 ? Math.max(...nums) : 0;
-    return `INV-${String(max + 1).padStart(4, "0")}`;
+    return `${prefix}${String(max + 1).padStart(5, "0")}`;
   };
 
   /* ─── validate ─── */
@@ -833,8 +835,8 @@ const Invoices = () => {
 
       {/* ═══ Invoice Preview Dialog ═══ */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[95vh] overflow-y-auto p-0">
+          <DialogHeader className="px-6 pt-6">
             <DialogTitle>Invoice Preview</DialogTitle>
             <DialogDescription>
               Preview and export invoice {previewInvoice?.invoice_number}
@@ -843,102 +845,222 @@ const Invoices = () => {
 
           {previewInvoice && (
             <>
-              <div ref={previewRef} className="bg-background p-8 rounded-lg border border-border">
-                {/* Company header */}
-                <div className="flex justify-between items-start mb-8">
-                  <div>
-                    <h2 className="text-xl font-bold text-foreground">{tenant?.name ?? "Company"}</h2>
-                    {tenant?.address && <p className="text-sm text-muted-foreground mt-1">{tenant.address}</p>}
-                    {tenant?.tax_id && <p className="text-sm text-muted-foreground">Tax ID: {tenant.tax_id}</p>}
+              {/* A4 container — 210mm × 297mm ratio */}
+              <div
+                ref={previewRef}
+                className="mx-auto bg-white text-black"
+                style={{
+                  width: "210mm",
+                  minHeight: "297mm",
+                  padding: "20mm 20mm 15mm 20mm",
+                  fontFamily: "system-ui, -apple-system, sans-serif",
+                  fontSize: "10pt",
+                  lineHeight: "1.5",
+                  boxSizing: "border-box",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                {/* ── Header: logo + company vs INVOICE title ── */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", borderBottom: "3px solid #1a1a2e", paddingBottom: "16px" }}>
+                  <div style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
+                    {tenant?.logo_url && (
+                      <img
+                        src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/tenant-documents/${tenant.logo_url}`}
+                        alt="Company Logo"
+                        style={{ width: "60px", height: "60px", objectFit: "contain", borderRadius: "6px" }}
+                        crossOrigin="anonymous"
+                      />
+                    )}
+                    <div>
+                      <h2 style={{ fontSize: "16pt", fontWeight: 700, margin: 0, color: "#1a1a2e" }}>
+                        {tenant?.name ?? "Company"}
+                      </h2>
+                      {tenant?.address && (
+                        <p style={{ margin: "2px 0 0", fontSize: "9pt", color: "#555" }}>{tenant.address}</p>
+                      )}
+                      {tenant?.tax_id && (
+                        <p style={{ margin: "2px 0 0", fontSize: "9pt", color: "#555" }}>Tax ID: {tenant.tax_id}</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <h3 className="text-2xl font-bold text-foreground">INVOICE</h3>
-                    <p className="text-sm font-medium text-muted-foreground mt-1">
+                  <div style={{ textAlign: "right" }}>
+                    <h3 style={{ fontSize: "22pt", fontWeight: 800, margin: 0, color: "#1a1a2e", letterSpacing: "2px" }}>
+                      INVOICE
+                    </h3>
+                    <p style={{ margin: "4px 0 0", fontSize: "11pt", fontWeight: 600, color: "#333" }}>
                       {previewInvoice.invoice_number}
                     </p>
-                    <Badge className={statusColors[previewInvoice.status] ?? ""} variant="secondary">
-                      {previewInvoice.status.toUpperCase()}
-                    </Badge>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        marginTop: "6px",
+                        padding: "2px 10px",
+                        borderRadius: "4px",
+                        fontSize: "8pt",
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                        backgroundColor:
+                          previewInvoice.status === "paid"
+                            ? "#d1fae5"
+                            : previewInvoice.status === "sent"
+                            ? "#dbeafe"
+                            : "#f3f4f6",
+                        color:
+                          previewInvoice.status === "paid"
+                            ? "#065f46"
+                            : previewInvoice.status === "sent"
+                            ? "#1e40af"
+                            : "#374151",
+                      }}
+                    >
+                      {previewInvoice.status}
+                    </span>
                   </div>
                 </div>
 
-                {/* Dates & customer */}
-                <div className="grid grid-cols-2 gap-6 mb-8">
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase">Bill To</p>
-                    <p className="font-medium text-foreground">{(previewInvoice.customers as any)?.name}</p>
-                    {(previewInvoice.customers as any)?.email && (
-                      <p className="text-sm text-muted-foreground">{(previewInvoice.customers as any).email}</p>
-                    )}
+                {/* ── Bill To / Invoice Details ── */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "28px" }}>
+                  <div style={{ background: "#f9fafb", borderRadius: "6px", padding: "14px" }}>
+                    <p style={{ fontSize: "8pt", fontWeight: 700, textTransform: "uppercase", color: "#888", letterSpacing: "1px", margin: "0 0 6px" }}>
+                      Bill To
+                    </p>
+                    <p style={{ fontWeight: 600, fontSize: "11pt", margin: "0 0 2px", color: "#1a1a2e" }}>
+                      {(previewInvoice.customers as any)?.name}
+                    </p>
                     {(previewInvoice.customers as any)?.address && (
-                      <p className="text-sm text-muted-foreground">{(previewInvoice.customers as any).address}</p>
+                      <p style={{ margin: "2px 0", fontSize: "9pt", color: "#555" }}>
+                        {(previewInvoice.customers as any).address}
+                      </p>
+                    )}
+                    {(previewInvoice.customers as any)?.tax_id && (
+                      <p style={{ margin: "2px 0", fontSize: "9pt", color: "#555" }}>
+                        Tax ID: {(previewInvoice.customers as any).tax_id}
+                      </p>
+                    )}
+                    {(previewInvoice.customers as any)?.email && (
+                      <p style={{ margin: "2px 0", fontSize: "9pt", color: "#555" }}>
+                        {(previewInvoice.customers as any).email}
+                      </p>
+                    )}
+                    {(previewInvoice.customers as any)?.phone && (
+                      <p style={{ margin: "2px 0", fontSize: "9pt", color: "#555" }}>
+                        {(previewInvoice.customers as any).phone}
+                      </p>
                     )}
                   </div>
-                  <div className="text-right space-y-1">
-                    <p className="text-sm">
-                      <span className="text-muted-foreground">Date: </span>
-                      <span className="font-medium">{previewInvoice.invoice_date}</span>
-                    </p>
-                    <p className="text-sm">
-                      <span className="text-muted-foreground">Due: </span>
-                      <span className="font-medium">{previewInvoice.due_date}</span>
-                    </p>
+                  <div style={{ textAlign: "right" }}>
+                    <table style={{ marginLeft: "auto", borderCollapse: "collapse", fontSize: "9pt" }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ padding: "3px 12px 3px 0", color: "#888", fontWeight: 600 }}>Invoice Date</td>
+                          <td style={{ padding: "3px 0", fontWeight: 500 }}>{previewInvoice.invoice_date}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ padding: "3px 12px 3px 0", color: "#888", fontWeight: 600 }}>Due Date</td>
+                          <td style={{ padding: "3px 0", fontWeight: 500 }}>{previewInvoice.due_date}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ padding: "3px 12px 3px 0", color: "#888", fontWeight: 600 }}>Status</td>
+                          <td style={{ padding: "3px 0", fontWeight: 500, textTransform: "capitalize" }}>
+                            {previewInvoice.status}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 
-                {/* Line items */}
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="text-right">Unit Price</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {previewLines.map((l: any) => (
-                      <TableRow key={l.id}>
-                        <TableCell>{l.description}</TableCell>
-                        <TableCell className="text-right">{Number(l.quantity)}</TableCell>
-                        <TableCell className="text-right font-mono">{fmt(Number(l.unit_price))}</TableCell>
-                        <TableCell className="text-right font-mono">{fmt(Number(l.amount))}</TableCell>
-                      </TableRow>
+                {/* ── Line Items Table ── */}
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "24px" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid #1a1a2e" }}>
+                      <th style={{ textAlign: "left", padding: "8px 6px", fontSize: "8pt", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: "#1a1a2e" }}>
+                        Description
+                      </th>
+                      <th style={{ textAlign: "right", padding: "8px 6px", fontSize: "8pt", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: "#1a1a2e", width: "60px" }}>
+                        Qty
+                      </th>
+                      <th style={{ textAlign: "right", padding: "8px 6px", fontSize: "8pt", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: "#1a1a2e", width: "100px" }}>
+                        Unit Price
+                      </th>
+                      <th style={{ textAlign: "right", padding: "8px 6px", fontSize: "8pt", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: "#1a1a2e", width: "100px" }}>
+                        Amount
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewLines.map((l: any, idx: number) => (
+                      <tr key={l.id} style={{ borderBottom: "1px solid #e5e7eb", backgroundColor: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
+                        <td style={{ padding: "8px 6px", fontSize: "9pt" }}>{l.description}</td>
+                        <td style={{ padding: "8px 6px", textAlign: "right", fontSize: "9pt" }}>{Number(l.quantity)}</td>
+                        <td style={{ padding: "8px 6px", textAlign: "right", fontFamily: "monospace", fontSize: "9pt" }}>{fmt(Number(l.unit_price))}</td>
+                        <td style={{ padding: "8px 6px", textAlign: "right", fontFamily: "monospace", fontSize: "9pt" }}>{fmt(Number(l.amount))}</td>
+                      </tr>
                     ))}
-                  </TableBody>
-                </Table>
+                  </tbody>
+                </table>
 
-                {/* Totals */}
-                <div className="flex flex-col items-end mt-6 space-y-1 text-sm">
-                  <div className="flex gap-12">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-mono w-28 text-right">{fmt(Number(previewInvoice.subtotal))}</span>
-                  </div>
-                  <div className="flex gap-12">
-                    <span className="text-muted-foreground">VAT (20%)</span>
-                    <span className="font-mono w-28 text-right">{fmt(Number(previewInvoice.tax_amount))}</span>
-                  </div>
-                  <div className="flex gap-12 font-bold text-lg border-t border-border pt-2">
-                    <span>Total Due</span>
-                    <span className="font-mono w-28 text-right">{fmt(Number(previewInvoice.total_amount))}</span>
-                  </div>
-                  {Number(previewInvoice.amount_paid) > 0 && (
-                    <div className="flex gap-12 text-emerald-600">
-                      <span>Paid</span>
-                      <span className="font-mono w-28 text-right">{fmt(Number(previewInvoice.amount_paid))}</span>
-                    </div>
-                  )}
+                {/* ── Totals ── */}
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <table style={{ borderCollapse: "collapse", minWidth: "220px" }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ padding: "4px 16px 4px 0", fontSize: "9pt", color: "#555" }}>Subtotal</td>
+                        <td style={{ padding: "4px 0", textAlign: "right", fontFamily: "monospace", fontSize: "9pt" }}>
+                          {fmt(Number(previewInvoice.subtotal))}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: "4px 16px 4px 0", fontSize: "9pt", color: "#555" }}>VAT (20%)</td>
+                        <td style={{ padding: "4px 0", textAlign: "right", fontFamily: "monospace", fontSize: "9pt" }}>
+                          {fmt(Number(previewInvoice.tax_amount))}
+                        </td>
+                      </tr>
+                      <tr style={{ borderTop: "2px solid #1a1a2e" }}>
+                        <td style={{ padding: "8px 16px 4px 0", fontSize: "12pt", fontWeight: 700, color: "#1a1a2e" }}>
+                          Total Due
+                        </td>
+                        <td style={{ padding: "8px 0 4px", textAlign: "right", fontFamily: "monospace", fontSize: "12pt", fontWeight: 700, color: "#1a1a2e" }}>
+                          {fmt(Number(previewInvoice.total_amount))}
+                        </td>
+                      </tr>
+                      {Number(previewInvoice.amount_paid) > 0 && (
+                        <tr>
+                          <td style={{ padding: "4px 16px 4px 0", fontSize: "9pt", color: "#059669", fontWeight: 600 }}>Paid</td>
+                          <td style={{ padding: "4px 0", textAlign: "right", fontFamily: "monospace", fontSize: "9pt", color: "#059669", fontWeight: 600 }}>
+                            {fmt(Number(previewInvoice.amount_paid))}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
 
+                {/* ── Notes ── */}
                 {previewInvoice.notes && (
-                  <div className="mt-6 pt-4 border-t border-border">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Notes</p>
-                    <p className="text-sm text-muted-foreground">{previewInvoice.notes}</p>
+                  <div style={{ marginTop: "24px", paddingTop: "12px", borderTop: "1px solid #e5e7eb" }}>
+                    <p style={{ fontSize: "8pt", fontWeight: 700, textTransform: "uppercase", color: "#888", letterSpacing: "1px", margin: "0 0 4px" }}>
+                      Notes
+                    </p>
+                    <p style={{ fontSize: "9pt", color: "#555", margin: 0 }}>{previewInvoice.notes}</p>
                   </div>
                 )}
+
+                {/* ── Footer spacer + footer ── */}
+                <div style={{ flexGrow: 1 }} />
+                <div style={{ borderTop: "2px solid #1a1a2e", paddingTop: "10px", marginTop: "20px", textAlign: "center" }}>
+                  <p style={{ margin: 0, fontSize: "8pt", color: "#888" }}>
+                    {tenant?.name}{tenant?.tax_id ? ` • Tax ID: ${tenant.tax_id}` : ""}{tenant?.address ? ` • ${tenant.address}` : ""}
+                  </p>
+                  <p style={{ margin: "2px 0 0", fontSize: "8pt", color: "#aaa" }}>
+                    Thank you for your business
+                  </p>
+                </div>
               </div>
 
-              <DialogFooter>
+              <DialogFooter className="px-6 pb-6">
                 <Button variant="outline" onClick={() => window.print()}>
                   <Printer className="h-4 w-4 mr-1" /> Print
                 </Button>
