@@ -364,10 +364,12 @@ const PerformanceAnalysis = () => {
 
       // --- Company Header ---
       if (tenantName) {
-        pdf.setFontSize(10);
+        // jsPDF built-in fonts only support WinAnsi encoding - sanitize text
+        const safeName = tenantName.replace(/[^\x20-\x7E]/g, '');
+        pdf.setFontSize(11);
         pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(100);
-        pdf.text(tenantName.toUpperCase(), margin, y + 4);
+        pdf.setTextColor(80);
+        pdf.text(safeName, margin, y + 4);
         y += 8;
       }
 
