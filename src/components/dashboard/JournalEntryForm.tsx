@@ -12,6 +12,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/utils";
 
 interface JournalLine {
   id?: string;
@@ -35,7 +36,7 @@ interface Props {
 }
 
 const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
-  const { tenantId } = useTenant();
+  const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -341,8 +342,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
     }
   }, [tenantId, user, entryDate, description, memo, isRecurring, recurrenceInterval, lines, queryClient, onOpenChange, isEditMode, editEntryId]);
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+  const fmt = (n: number) => formatCurrency(n, defaultCurrency);
 
   // Group accounts by type
   const accountsByType = accounts.reduce<Record<string, typeof accounts>>((acc, a) => {
