@@ -22,7 +22,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Trash2, Eye, CreditCard, Printer, FileText, Banknote, XCircle } from "lucide-react";
+import { Plus, Search, Trash2, Eye, CreditCard, Printer, FileText, Banknote, XCircle, Pencil, Copy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import html2canvas from "html2canvas";
@@ -252,6 +252,33 @@ const Invoices = () => {
       invLines.length > 0
         ? invLines.map((l: any) => ({
             id: l.id,
+            description: l.description,
+            quantity: Number(l.quantity),
+            unit_price: Number(l.unit_price),
+            amount: Number(l.amount),
+            account_id: l.account_id ?? "",
+          }))
+        : [emptyLine()]
+    );
+    setErrors([]);
+    setFormOpen(true);
+  };
+
+  const openDuplicate = (id: string) => {
+    const inv = invoices.find((i) => i.id === id);
+    if (!inv) return;
+    resetForm();
+    setCustomerId(inv.customer_id ?? "");
+    setInvoiceDate(format(new Date(), "yyyy-MM-dd"));
+    setDueDate(inv.due_date);
+    setInvoiceCurrency((inv as any).currency ?? defaultCurrency);
+    setNotes(inv.notes ?? "");
+
+    const invLines = invoiceLines.filter((l: any) => l.invoice_id === id);
+    setLines(
+      invLines.length > 0
+        ? invLines.map((l: any) => ({
+            id: crypto.randomUUID(),
             description: l.description,
             quantity: Number(l.quantity),
             unit_price: Number(l.unit_price),
@@ -699,9 +726,14 @@ const Invoices = () => {
                           <XCircle className="h-4 w-4 text-destructive" />
                         </Button>
                       )}
-                      {inv.status === "draft" && (
+                      {can("invoices.edit") && (inv.status === "draft" || inv.status === "sent") && (
                         <Button variant="ghost" size="icon" onClick={() => openEdit(inv.id)} title="Edit">
-                          <Search className="h-4 w-4" />
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {can("invoices.edit") && (
+                        <Button variant="ghost" size="icon" onClick={() => openDuplicate(inv.id)} title="Duplicate">
+                          <Copy className="h-4 w-4" />
                         </Button>
                       )}
                       {inv.journal_entry_id && (
