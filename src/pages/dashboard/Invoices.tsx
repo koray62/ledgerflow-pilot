@@ -504,20 +504,23 @@ const Invoices = () => {
     if (!inv || !tenantId || !user) return;
     setSaving(true);
     try {
-      if (inv.journal_entry_id) {
-        await supabase
-          .from("journal_entries")
-          .update({ status: "voided" } as any)
-          .eq("id", inv.journal_entry_id);
+      const jeIds = [inv.journal_entry_id, inv.payment_journal_entry_id].filter(Boolean) as string[];
+
+      for (const jeId of jeIds) {
+        /* delete journal lines first (FK constraint) */
+        await supabase.from("journal_lines").delete().eq("journal_entry_id", jeId);
+        await supabase.from("journal_entries").delete().eq("id", jeId);
       }
+
       await supabase
         .from("invoices")
-        .update({ status: "cancelled" } as any)
+        .update({ status: "cancelled", journal_entry_id: null, payment_journal_entry_id: null } as any)
         .eq("id", invoiceId);
 
       qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["journal_entries"] });
-      toast({ title: "Invoice cancelled", description: `Invoice ${inv.invoice_number} cancelled and journal entry voided.` });
+      qc.invalidateQueries({ queryKey: ["journal_lines"] });
+      toast({ title: "Invoice cancelled", description: `Invoice ${inv.invoice_number} cancelled and all journal entries deleted.` });
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
