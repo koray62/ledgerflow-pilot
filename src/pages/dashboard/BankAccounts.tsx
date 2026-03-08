@@ -388,7 +388,8 @@ export default function BankAccounts() {
         const cr = parseFloat(r[colMap.creditIdx]?.replace(/[^0-9.\-]/g, "") || "0");
         amount = cr - dr;
       }
-      return { date: convertDate(r[colMap.dateIdx] || "", dateFormat), description: r[colMap.descIdx] || "", amount };
+      const detailedDescription = colMap.detailDescIdx >= 0 ? (r[colMap.detailDescIdx] || "").trim() : undefined;
+      return { date: convertDate(r[colMap.dateIdx] || "", dateFormat), description: r[colMap.descIdx] || "", detailedDescription: detailedDescription || undefined, amount };
     }).filter((t) => t.description || t.amount);
     setParsedTxs(txs);
   };
