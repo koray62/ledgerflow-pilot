@@ -61,7 +61,7 @@ const TAX_RATE = 0.2;
 const Invoices = () => {
   const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
-  const fmt = (n: number) => fmtCurrency(n, defaultCurrency);
+  const fmt = (n: number, currency?: string) => fmtCurrency(n, currency ?? defaultCurrency);
   const qc = useQueryClient();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -650,7 +650,7 @@ const Invoices = () => {
                         {inv.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right font-mono">{fmt(Number(inv.total_amount))}</TableCell>
+                    <TableCell className="text-right font-mono">{fmt(Number(inv.total_amount), inv.currency)}</TableCell>
                     <TableCell className="text-right space-x-1">
                       <Button
                         variant="ghost"
@@ -829,7 +829,7 @@ const Invoices = () => {
                         onChange={(e) => updateLine(idx, "unit_price", Number(e.target.value))}
                       />
                     </TableCell>
-                    <TableCell className="p-1 text-right font-mono">{fmt(line.amount)}</TableCell>
+                    <TableCell className="p-1 text-right font-mono">{fmt(line.amount, invoiceCurrency)}</TableCell>
                     <TableCell className="p-1">
                       {lines.length > 1 && (
                         <Button
@@ -851,15 +851,15 @@ const Invoices = () => {
             <div className="flex flex-col items-end mt-3 space-y-1 text-sm">
               <div className="flex gap-8">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-mono w-28 text-right">{fmt(subtotal)}</span>
+                <span className="font-mono w-28 text-right">{fmt(subtotal, invoiceCurrency)}</span>
               </div>
               <div className="flex gap-8">
                 <span className="text-muted-foreground">VAT (20%)</span>
-                <span className="font-mono w-28 text-right">{fmt(taxAmount)}</span>
+                <span className="font-mono w-28 text-right">{fmt(taxAmount, invoiceCurrency)}</span>
               </div>
               <div className="flex gap-8 font-bold text-base border-t border-border pt-1">
                 <span>Total</span>
-                <span className="font-mono w-28 text-right">{fmt(totalAmount)}</span>
+                <span className="font-mono w-28 text-right">{fmt(totalAmount, invoiceCurrency)}</span>
               </div>
             </div>
           </div>
@@ -905,7 +905,7 @@ const Invoices = () => {
             </Select>
             <p className="text-sm text-muted-foreground">
               Amount: <span className="font-mono font-semibold">
-                {fmt(Number(invoices.find((i) => i.id === paymentInvoiceId)?.total_amount ?? 0))}
+                {(() => { const inv = invoices.find((i) => i.id === paymentInvoiceId); return fmt(Number(inv?.total_amount ?? 0), inv?.currency); })()}
               </span>
             </p>
           </div>
@@ -1080,8 +1080,8 @@ const Invoices = () => {
                       <tr key={l.id} style={{ borderBottom: "1px solid #e5e7eb", backgroundColor: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
                         <td style={{ padding: "8px 6px", fontSize: "9pt" }}>{l.description}</td>
                         <td style={{ padding: "8px 6px", textAlign: "right", fontSize: "9pt" }}>{Number(l.quantity)}</td>
-                        <td style={{ padding: "8px 6px", textAlign: "right", fontFamily: "monospace", fontSize: "9pt" }}>{fmt(Number(l.unit_price))}</td>
-                        <td style={{ padding: "8px 6px", textAlign: "right", fontFamily: "monospace", fontSize: "9pt" }}>{fmt(Number(l.amount))}</td>
+                        <td style={{ padding: "8px 6px", textAlign: "right", fontFamily: "monospace", fontSize: "9pt" }}>{fmt(Number(l.unit_price), previewInvoice?.currency)}</td>
+                        <td style={{ padding: "8px 6px", textAlign: "right", fontFamily: "monospace", fontSize: "9pt" }}>{fmt(Number(l.amount), previewInvoice?.currency)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1094,13 +1094,13 @@ const Invoices = () => {
                       <tr>
                         <td style={{ padding: "4px 16px 4px 0", fontSize: "9pt", color: "#555" }}>Subtotal</td>
                         <td style={{ padding: "4px 0", textAlign: "right", fontFamily: "monospace", fontSize: "9pt" }}>
-                          {fmt(Number(previewInvoice.subtotal))}
+                          {fmt(Number(previewInvoice.subtotal), previewInvoice?.currency)}
                         </td>
                       </tr>
                       <tr>
                         <td style={{ padding: "4px 16px 4px 0", fontSize: "9pt", color: "#555" }}>VAT (20%)</td>
                         <td style={{ padding: "4px 0", textAlign: "right", fontFamily: "monospace", fontSize: "9pt" }}>
-                          {fmt(Number(previewInvoice.tax_amount))}
+                          {fmt(Number(previewInvoice.tax_amount), previewInvoice?.currency)}
                         </td>
                       </tr>
                       <tr style={{ borderTop: "2px solid #1a1a2e" }}>
@@ -1108,14 +1108,14 @@ const Invoices = () => {
                           Total Due
                         </td>
                         <td style={{ padding: "8px 0 4px", textAlign: "right", fontFamily: "monospace", fontSize: "12pt", fontWeight: 700, color: "#1a1a2e" }}>
-                          {fmt(Number(previewInvoice.total_amount))}
+                          {fmt(Number(previewInvoice.total_amount), previewInvoice?.currency)}
                         </td>
                       </tr>
                       {Number(previewInvoice.amount_paid) > 0 && (
                         <tr>
                           <td style={{ padding: "4px 16px 4px 0", fontSize: "9pt", color: "#059669", fontWeight: 600 }}>Paid</td>
                           <td style={{ padding: "4px 0", textAlign: "right", fontFamily: "monospace", fontSize: "9pt", color: "#059669", fontWeight: 600 }}>
-                            {fmt(Number(previewInvoice.amount_paid))}
+                            {fmt(Number(previewInvoice.amount_paid), previewInvoice?.currency)}
                           </td>
                         </tr>
                       )}
