@@ -52,12 +52,12 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
         const { data: tenant } = await supabase
           .from("tenants")
-          .select("name, default_currency" as any)
+          .select("name, default_currency")
           .eq("id", utr.tenant_id)
-          .maybeSingle();
+          .maybeSingle() as any;
 
         setTenantName(tenant?.name ?? null);
-        setDefaultCurrency((tenant as any)?.default_currency ?? "USD");
+        setDefaultCurrency(tenant?.default_currency ?? "USD");
       }
       setLoading(false);
     };
