@@ -71,8 +71,6 @@ export default function HelpChatbot() {
 
   const handleClose = () => {
     setOpen(false);
-    setMessages([]);
-    setInput("");
   };
 
   const sendMessage = useCallback(async () => {
