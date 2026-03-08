@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,7 +13,8 @@ import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
-import { TrendingUp, TrendingDown, DollarSign, Percent, Shield, Activity } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Percent, Shield, Activity, Download, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { Database } from "@/integrations/supabase/types";
 
 type AccountType = Database["public"]["Enums"]["account_type"];
@@ -75,6 +76,8 @@ interface YearlyData {
 
 const PerformanceAnalysis = () => {
   const { tenantId } = useTenant();
+  const chartsRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
 
   // Fetch accounts
   const { data: accounts = [], isLoading: loadingAccounts } = useQuery({
@@ -344,13 +347,227 @@ const PerformanceAnalysis = () => {
     },
   ];
 
+
+  const handleExportPDF = async () => {
+    setExporting(true);
+    try {
+      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+        import("jspdf"),
+        import("html2canvas"),
+      ]);
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const margin = 14;
+      const contentW = pageW - margin * 2;
+      let y = margin;
+
+      // --- Title ---
+      pdf.setFontSize(18);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Performance Analysis Report", margin, y + 6);
+      y += 10;
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(120);
+      pdf.text(`${YEARS[0]}–${YEARS[3]} · Generated ${new Date().toLocaleDateString()}`, margin, y + 4);
+      pdf.setTextColor(0);
+      y += 12;
+
+      // --- KPI Summary ---
+      pdf.setFontSize(12);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Key Performance Indicators (Current Year)", margin, y);
+      y += 7;
+
+      const kpiItems = [
+        { label: "Revenue", value: current ? fmt(current.revenue) : "—" },
+        { label: "Net Income", value: current ? fmt(current.netIncome) : "—" },
+        { label: "Net Profit Margin", value: current ? `${current.netProfitMargin.toFixed(1)}%` : "—" },
+        { label: "Quick Ratio", value: current?.quickRatio != null ? current.quickRatio.toFixed(2) : "—" },
+        { label: "Expense Ratio", value: current ? `${current.expenseRatio.toFixed(1)}%` : "—" },
+        { label: "Monthly Burn Rate", value: current ? fmt(current.monthlyAvgExpenses) : "—" },
+      ];
+
+      const kpiColW = contentW / 3;
+      pdf.setFontSize(9);
+      kpiItems.forEach((kpi, i) => {
+        const col = i % 3;
+        const row = Math.floor(i / 3);
+        const x = margin + col * kpiColW;
+        const yy = y + row * 12;
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(100);
+        pdf.text(kpi.label, x, yy);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(0);
+        pdf.text(kpi.value, x, yy + 5);
+      });
+      y += Math.ceil(kpiItems.length / 3) * 12 + 6;
+
+      // --- Capture charts ---
+      if (chartsRef.current) {
+        // Make all tab content visible for capture
+        const tabContents = chartsRef.current.querySelectorAll('[data-state]');
+        const originalStates: { el: Element; state: string | null }[] = [];
+        tabContents.forEach((el) => {
+          originalStates.push({ el, state: el.getAttribute('data-state') });
+          if (el.getAttribute('data-state') === 'inactive') {
+            el.setAttribute('data-state', 'active');
+            (el as HTMLElement).style.display = '';
+          }
+        });
+
+        // Capture overview charts
+        const overviewSection = chartsRef.current.querySelector('[data-pdf="overview"]');
+        if (overviewSection) {
+          const canvas = await html2canvas(overviewSection as HTMLElement, {
+            scale: 2,
+            backgroundColor: "#ffffff",
+            useCORS: true,
+            logging: false,
+          });
+          const imgData = canvas.toDataURL("image/png");
+          const imgH = (canvas.height / canvas.width) * contentW;
+
+          if (y + imgH + 10 > pdf.internal.pageSize.getHeight() - margin) {
+            pdf.addPage();
+            y = margin;
+          }
+          pdf.setFontSize(12);
+          pdf.setFont("helvetica", "bold");
+          pdf.text("Charts Overview", margin, y);
+          y += 6;
+          pdf.addImage(imgData, "PNG", margin, y, contentW, imgH);
+          y += imgH + 8;
+        }
+
+        // Restore tab states
+        originalStates.forEach(({ el, state }) => {
+          if (state) el.setAttribute('data-state', state);
+        });
+      }
+
+      // --- Detailed Table ---
+      if (y + 60 > pdf.internal.pageSize.getHeight() - margin) {
+        pdf.addPage();
+        y = margin;
+      }
+      pdf.setFontSize(12);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Detailed Year-by-Year Comparison", margin, y);
+      y += 7;
+
+      // Table header
+      const cols = ["Metric", ...YEARS.map(String), "CAGR"];
+      const colWidths = [50, ...YEARS.map(() => 28), 22];
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFillColor(240, 240, 245);
+      pdf.rect(margin, y - 1, contentW, 7, "F");
+      cols.forEach((col, i) => {
+        const x = margin + colWidths.slice(0, i).reduce((s, w) => s + w, 0);
+        pdf.text(col, i === 0 ? x + 1 : x + colWidths[i] - 1, y + 4, i === 0 ? {} : { align: "right" });
+      });
+      y += 8;
+
+      // Table rows
+      pdf.setFont("helvetica", "normal");
+      metricRows.forEach((row, ri) => {
+        if (y + 7 > pdf.internal.pageSize.getHeight() - margin) {
+          pdf.addPage();
+          y = margin;
+        }
+        if (ri % 2 === 0) {
+          pdf.setFillColor(248, 248, 252);
+          pdf.rect(margin, y - 1, contentW, 6, "F");
+        }
+        // Metric label
+        pdf.setTextColor(40);
+        pdf.text(row.label, margin + 1, y + 3.5);
+        // Year values
+        YEARS.forEach((yr, yi) => {
+          const d = yearlyData.find((yd) => yd.year === yr);
+          const val = d ? (d as any)[row.key] : null;
+          const x = margin + colWidths.slice(0, yi + 1).reduce((s, w) => s + w, 0) + colWidths[yi + 1] - 1;
+          pdf.text(row.format(val), x, y + 3.5, { align: "right" });
+        });
+        // CAGR
+        const cagrX = margin + contentW - 1;
+        let cagrVal = "—";
+        if (row.key === "revenue" && cagr.revenue !== null) cagrVal = `${cagr.revenue.toFixed(1)}%`;
+        if (row.key === "expenses" && cagr.expenses !== null) cagrVal = `${cagr.expenses.toFixed(1)}%`;
+        if (row.key === "netIncome" && cagr.netIncome !== null) cagrVal = `${cagr.netIncome.toFixed(1)}%`;
+        pdf.setTextColor(0, 130, 120);
+        pdf.text(cagrVal, cagrX, y + 3.5, { align: "right" });
+        pdf.setTextColor(0);
+        y += 6;
+      });
+      y += 6;
+
+      // --- Financial Ratios Summary ---
+      if (y + 40 > pdf.internal.pageSize.getHeight() - margin) {
+        pdf.addPage();
+        y = margin;
+      }
+      pdf.setFontSize(12);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(0);
+      pdf.text("Financial Ratios Summary", margin, y);
+      y += 7;
+
+      pdf.setFontSize(8);
+      ratioCards.forEach((rc) => {
+        if (y + 14 > pdf.internal.pageSize.getHeight() - margin) {
+          pdf.addPage();
+          y = margin;
+        }
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(40);
+        pdf.text(`${rc.title} — ${rc.description}`, margin + 1, y + 3);
+        y += 5;
+        pdf.setFont("helvetica", "normal");
+        const valStr = rc.values.map((v) => `${v.year}: ${rc.format(v.value as any)}`).join("   |   ");
+        pdf.setTextColor(80);
+        pdf.text(valStr, margin + 3, y + 3);
+        y += 7;
+      });
+
+      // --- Footer ---
+      const totalPages = pdf.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        pdf.setPage(p);
+        pdf.setFontSize(7);
+        pdf.setTextColor(160);
+        pdf.text(
+          `LedgerPilot · Performance Analysis · Page ${p} of ${totalPages}`,
+          pageW / 2,
+          pdf.internal.pageSize.getHeight() - 6,
+          { align: "center" }
+        );
+      }
+
+      pdf.save(`Performance_Analysis_${YEARS[0]}-${YEARS[3]}.pdf`);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Performance Analysis</h1>
-        <p className="text-sm text-muted-foreground">
-          {YEARS[0]}–{YEARS[3]} · Posted entries only
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Performance Analysis</h1>
+          <p className="text-sm text-muted-foreground">
+            {YEARS[0]}–{YEARS[3]} · Posted entries only
+          </p>
+        </div>
+        <Button onClick={handleExportPDF} disabled={exporting || isLoading} variant="outline" size="sm">
+          {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+          {exporting ? "Exporting…" : "Export PDF"}
+        </Button>
       </div>
 
       {/* KPI Summary Cards */}
@@ -411,6 +628,7 @@ const PerformanceAnalysis = () => {
       </div>
 
       {/* Tabs */}
+      <div ref={chartsRef}>
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -420,7 +638,7 @@ const PerformanceAnalysis = () => {
 
         {/* Tab 1: Overview Charts */}
         <TabsContent value="overview" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div data-pdf="overview" className="grid gap-6 lg:grid-cols-2">
             {/* Revenue vs Expenses */}
             <Card>
               <CardHeader className="pb-2">
@@ -586,6 +804,7 @@ const PerformanceAnalysis = () => {
           </div>
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 };
