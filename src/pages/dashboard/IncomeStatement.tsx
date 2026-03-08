@@ -280,6 +280,20 @@ const IncomeStatement = () => {
               Compare
             </Label>
           </div>
+          {compareEnabled && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={() => {
+                const yr = new Date().getFullYear();
+                setStartDate(new Date(yr, 0, 1));
+                setEndDate(new Date(yr, 11, 31));
+              }}
+            >
+              Full Year
+            </Button>
+          )}
           <Badge
             variant="default"
             className={netIncome >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}
