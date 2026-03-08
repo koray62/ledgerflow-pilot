@@ -243,16 +243,49 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
 
         if (updateErr) throw updateErr;
 
-        // Soft-delete old lines (editors can update but only owners can hard-delete)
-        await supabase
+        // Separate existing lines (have id) from new lines
+        const validLines = lines.filter((l) => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0));
+        const existingLineIds = validLines.filter((l) => l.id).map((l) => l.id!);
+
+        // Soft-delete lines that were removed by the user
+        // Fetch current line IDs for this entry
+        const { data: currentLines } = await supabase
           .from("journal_lines")
-          .update({ deleted_at: new Date().toISOString() })
+          .select("id")
           .eq("journal_entry_id", editEntryId)
           .eq("tenant_id", tenantId)
           .is("deleted_at", null);
 
-        const lineRows = lines
-          .filter((l) => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
+        const currentLineIds = (currentLines ?? []).map((l) => l.id);
+        const removedLineIds = currentLineIds.filter((id) => !existingLineIds.includes(id));
+
+        if (removedLineIds.length > 0) {
+          const { error: softDelErr } = await supabase
+            .from("journal_lines")
+            .update({ deleted_at: new Date().toISOString() })
+            .in("id", removedLineIds)
+            .eq("tenant_id", tenantId);
+          if (softDelErr) console.error("Soft-delete lines error:", softDelErr);
+        }
+
+        // Update existing lines in place
+        for (const line of validLines.filter((l) => l.id)) {
+          const { error: upErr } = await supabase
+            .from("journal_lines")
+            .update({
+              account_id: line.accountId,
+              debit: parseFloat(line.debit) || 0,
+              credit: parseFloat(line.credit) || 0,
+              description: line.description.trim() || null,
+            })
+            .eq("id", line.id!)
+            .eq("tenant_id", tenantId);
+          if (upErr) console.error("Update line error:", upErr);
+        }
+
+        // Insert only truly new lines (no id)
+        const newLineRows = validLines
+          .filter((l) => !l.id)
           .map((l) => ({
             tenant_id: tenantId,
             journal_entry_id: editEntryId,
@@ -262,11 +295,12 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
             description: l.description.trim() || null,
           }));
 
-        const { error: linesErr } = await supabase
-          .from("journal_lines")
-          .insert(lineRows);
-
-        if (linesErr) throw linesErr;
+        if (newLineRows.length > 0) {
+          const { error: linesErr } = await supabase
+            .from("journal_lines")
+            .insert(newLineRows);
+          if (linesErr) throw linesErr;
+        }
 
         queryClient.invalidateQueries({ queryKey: ["journal-entries", tenantId] });
         queryClient.invalidateQueries({ queryKey: ["journal-line-totals", tenantId] });
