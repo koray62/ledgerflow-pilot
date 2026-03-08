@@ -1,45 +1,40 @@
 
-## Multi-Currency Support — IMPLEMENTED
 
-### Supported Currencies
-USD, EUR, AED (UAE Dirham), TRY (Turkish Lira), SAR (Saudi Riyal)
+## Problem
 
-### Database Changes ✅
-- `tenants.default_currency` (text, NOT NULL, default 'USD')
-- `journal_entries.currency` (text, NOT NULL, default 'USD')
-- `invoices.currency` (text, NOT NULL, default 'USD')
-- `bank_accounts.currency` already existed
+When a CSV-imported transaction matches an invoice (e.g. LP2026000102), the auto-payment logic creates journal lines using `s.debitAccountId` as the bank Chart of Account. However, when the AI returns a **multi-line suggestion** (revenue with VAT using the `lines` array), `debitAccountId` is not populated — it's only set for simple 2-line entries. This results in journal lines being created with a null/undefined `account_id`, producing an empty or broken journal entry.
 
-### Shared Utility (`src/lib/utils.ts`) ✅
-- `SUPPORTED_CURRENCIES` constant with code, label, symbol
-- `formatCurrency(amount, currency, options?)` using `Intl.NumberFormat`
-- `CurrencyCode` type
+The screenshot confirms this: the Edit Journal Entry form shows the correct description ("Payment received for Invoice LP2...") but the journal lines have no accounts or amounts populated.
 
-### Tenant Context (`useTenant.tsx`) ✅
-- `defaultCurrency` exposed from tenant record
+## Root Cause
 
-### Settings (`DashboardSettings.tsx`) ✅
-- Default Currency dropdown in Organization section
+In `BankAccounts.tsx` line 503:
+```typescript
+const bankCoAId = s.debitAccountId; // undefined for multi-line suggestions
+```
 
-### Form Currency Selectors ✅
-- **JournalEntryForm**: Currency dropdown, defaults to tenant currency, saves to `journal_entries.currency`
-- **Invoices**: Currency dropdown in create/edit dialog, saves to `invoices.currency`
-- **BankAccounts**: Select dropdown with all 5 currencies (replaced text input)
+For incoming payments (positive amounts), the AI generates multi-line entries (bank debit, revenue credit, VAT credit) using the `lines` array. In that format, `debitAccountId` is omitted. The invoice-matching code then uses this empty value for the bank account in the payment journal entry.
 
-### Financial Statements ✅
-All reports use `formatCurrency(amount, defaultCurrency)`:
-- Balance Sheet, Income Statement, Cash Flow, Performance Analysis, Dashboard Overview
-- Chart of Accounts, Journal Entries, OCR Upload
-- Bank account balances display in account's own currency
+## Fix
 
-### Design Decision: Single-Currency Reporting
-- Financial statements report in tenant's default currency only
-- `currency` field on journal_entries/invoices is metadata for the transaction currency
-- Journal line debits/credits are always in the functional (reporting) currency
+In the `approveEntry` function, when `isInvoicePayment` is true, resolve the bank CoA account ID reliably:
 
-### Future Enhancements (out of scope)
-- Multi-currency FX rate table
-- Unrealized gain/loss calculations
-- Currency revaluation entries
-- Currency badge on mixed-currency views
-- Bank → Journal Entry currency validation on CSV import
+1. First try `s.debitAccountId` (simple entry format).
+2. If empty, look through `s.lines` for the line with a non-zero `debit` — that's the bank account line.
+3. If still not found, fall back to finding the bank account from `chartAccounts` by matching the selected `importAccountId` bank account, or by looking for an account with type "asset" and name containing "bank" or "cash".
+
+### Code Change (single location in `BankAccounts.tsx`)
+
+Replace the `bankCoAId` assignment (around line 503) with:
+
+```typescript
+// Resolve bank CoA: prefer debitAccountId, fall back to debit line in multi-line suggestion
+let bankCoAId = s.debitAccountId;
+if (!bankCoAId && s.lines?.length) {
+  const debitLine = s.lines.find((l) => l.debit > 0);
+  if (debitLine) bankCoAId = debitLine.accountId;
+}
+```
+
+This ensures that even when the AI uses the `lines` array format, the invoice payment journal entry correctly identifies and uses the bank account.
+
