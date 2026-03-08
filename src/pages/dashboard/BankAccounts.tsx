@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
@@ -173,33 +173,82 @@ export default function BankAccounts() {
   const [bulkApproving, setBulkApproving] = useState(false);
   const [reviewFilters, setReviewFilters] = useState({ status: "", date: "", reference: "", description: "", debit: "", credit: "", amount: "" });
 
-  // Cache suggestions per bank account so they persist across tab/account switches
-  const suggestionsCache = useRef<Record<string, { suggestions: AISuggestion[]; parsedTxs: ParsedTx[] }>>({});
+  // Cache suggestions per bank account — persisted to sessionStorage so they survive unmounts
+  const CACHE_KEY = "bankImportCache";
+
+  const readCache = useCallback((): Record<string, { suggestions: AISuggestion[]; parsedTxs: ParsedTx[]; csvHeaders?: string[]; csvRows?: string[][]; colMap?: typeof colMap }> => {
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  }, []);
+
+  const writeCache = useCallback((cache: Record<string, unknown>) => {
+    try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch {}
+  }, []);
+
   const suggestionsRef = useRef(suggestions);
   suggestionsRef.current = suggestions;
   const parsedTxsRef = useRef(parsedTxs);
   parsedTxsRef.current = parsedTxs;
+  const csvHeadersRef = useRef(csvHeaders);
+  csvHeadersRef.current = csvHeaders;
+  const csvRowsRef = useRef(csvRows);
+  csvRowsRef.current = csvRows;
+  const colMapRef = useRef(colMap);
+  colMapRef.current = colMap;
 
   const [importAccountId, setImportAccountIdRaw] = useState<string | null>(null);
 
+  // Persist current suggestions to sessionStorage whenever they change
+  useEffect(() => {
+    if (!importAccountId) return;
+    const cache = readCache();
+    if (suggestions.length > 0 || parsedTxs.length > 0) {
+      cache[importAccountId] = { suggestions, parsedTxs, csvHeaders, csvRows, colMap };
+      writeCache(cache);
+    } else if (cache[importAccountId]) {
+      // If everything was cleared (all approved), remove from cache
+      delete cache[importAccountId];
+      writeCache(cache);
+    }
+  }, [suggestions, parsedTxs, importAccountId, csvHeaders, csvRows, colMap, readCache, writeCache]);
+
   const setImportAccountId = useCallback((newId: string | null) => {
     setImportAccountIdRaw((prevId) => {
-      // Save current state for previous account
+      // Save current state for previous account to sessionStorage
       if (prevId && (suggestionsRef.current.length > 0 || parsedTxsRef.current.length > 0)) {
-        suggestionsCache.current[prevId] = { suggestions: suggestionsRef.current, parsedTxs: parsedTxsRef.current };
+        const cache = readCache();
+        cache[prevId] = {
+          suggestions: suggestionsRef.current,
+          parsedTxs: parsedTxsRef.current,
+          csvHeaders: csvHeadersRef.current,
+          csvRows: csvRowsRef.current,
+          colMap: colMapRef.current,
+        };
+        writeCache(cache);
       }
-      // Restore cached state for new account (if any)
-      if (newId && suggestionsCache.current[newId]) {
-        const cached = suggestionsCache.current[newId];
-        setSuggestions(cached.suggestions);
-        setParsedTxs(cached.parsedTxs);
+      // Restore cached state for new account (from sessionStorage)
+      if (newId) {
+        const cache = readCache();
+        if (cache[newId]) {
+          const cached = cache[newId];
+          setSuggestions(cached.suggestions);
+          setParsedTxs(cached.parsedTxs);
+          if (cached.csvHeaders) setCsvHeaders(cached.csvHeaders);
+          if (cached.csvRows) setCsvRows(cached.csvRows);
+          if (cached.colMap) setColMap(cached.colMap);
+        } else if (newId !== prevId) {
+          setSuggestions([]);
+          setParsedTxs([]);
+        }
       } else if (newId !== prevId) {
         setSuggestions([]);
         setParsedTxs([]);
       }
       return newId;
     });
-  }, []);
+  }, [readCache, writeCache]);
 
   /* — queries — */
   const { data: accounts = [], isLoading: accountsLoading } = useQuery({
