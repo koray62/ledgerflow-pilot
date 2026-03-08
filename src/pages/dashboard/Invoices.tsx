@@ -498,6 +498,33 @@ const Invoices = () => {
     }
   };
 
+  /* ─── cancel invoice ─── */
+  const handleCancelInvoice = async (invoiceId: string) => {
+    const inv = invoices.find((i) => i.id === invoiceId);
+    if (!inv || !tenantId || !user) return;
+    setSaving(true);
+    try {
+      if (inv.journal_entry_id) {
+        await supabase
+          .from("journal_entries")
+          .update({ status: "voided" } as any)
+          .eq("id", inv.journal_entry_id);
+      }
+      await supabase
+        .from("invoices")
+        .update({ status: "cancelled" } as any)
+        .eq("id", invoiceId);
+
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["journal_entries"] });
+      toast({ title: "Invoice cancelled", description: `Invoice ${inv.invoice_number} cancelled and journal entry voided.` });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   /* ─── PDF export ─── */
   const exportPdf = async () => {
     if (!previewRef.current) return;
