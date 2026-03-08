@@ -1,0 +1,927 @@
+import { useState, useCallback, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/hooks/useTenant";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
+import { Plus, Search, Trash2, Eye, CreditCard, Printer } from "lucide-react";
+import { format } from "date-fns";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+
+/* ─── types ─── */
+interface InvoiceLine {
+  id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+  account_id: string;
+}
+
+const emptyLine = (): InvoiceLine => ({
+  id: crypto.randomUUID(),
+  description: "",
+  quantity: 1,
+  unit_price: 0,
+  amount: 0,
+  account_id: "",
+});
+
+const statusColors: Record<string, string> = {
+  draft: "bg-muted text-muted-foreground",
+  sent: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  paid: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+  overdue: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  cancelled: "bg-muted text-muted-foreground line-through",
+};
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+
+const TAX_RATE = 0.2;
+
+/* ═══════════════════════════ COMPONENT ═══════════════════════════ */
+const Invoices = () => {
+  const { tenantId } = useTenant();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentInvoiceId, setPaymentInvoiceId] = useState<string | null>(null);
+  const [paymentBankId, setPaymentBankId] = useState("");
+
+  /* form state */
+  const [customerId, setCustomerId] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [dueDate, setDueDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [lines, setLines] = useState<InvoiceLine[]>([emptyLine()]);
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  /* ─── queries ─── */
+  const { data: invoices = [], isLoading } = useQuery({
+    queryKey: ["invoices", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("*, customers(name, email, address)")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: invoiceLines = [] } = useQuery({
+    queryKey: ["invoice_lines", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("invoice_lines" as any)
+        .select("*")
+        .eq("tenant_id", tenantId!);
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ["customers", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("customers")
+        .select("*")
+        .eq("tenant_id", tenantId!)
+        .eq("is_active", true)
+        .is("deleted_at", null);
+      return data ?? [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["chart_of_accounts", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("chart_of_accounts")
+        .select("*")
+        .eq("tenant_id", tenantId!)
+        .eq("is_active", true)
+        .is("deleted_at", null)
+        .order("code");
+      return data ?? [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ["bank_accounts", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("bank_accounts")
+        .select("*")
+        .eq("tenant_id", tenantId!)
+        .eq("is_active", true)
+        .is("deleted_at", null);
+      return data ?? [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: tenant } = useQuery({
+    queryKey: ["tenant", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase.from("tenants").select("*").eq("id", tenantId!).single();
+      return data;
+    },
+    enabled: !!tenantId,
+  });
+
+  /* ─── helpers ─── */
+  const revenueAccounts = accounts.filter((a) => a.account_type === "revenue");
+  const arAccount = accounts.find(
+    (a) => a.account_type === "asset" && a.name.toLowerCase().includes("receivable")
+  );
+  const vatAccount = accounts.find(
+    (a) =>
+      a.account_type === "liability" &&
+      (a.name.toLowerCase().includes("vat") || a.name.toLowerCase().includes("tax payable"))
+  );
+
+  const subtotal = lines.reduce((s, l) => s + l.amount, 0);
+  const taxAmount = Math.round(subtotal * TAX_RATE * 100) / 100;
+  const totalAmount = subtotal + taxAmount;
+
+  const updateLine = (idx: number, field: keyof InvoiceLine, value: any) => {
+    setLines((prev) => {
+      const next = [...prev];
+      const line = { ...next[idx], [field]: value };
+      if (field === "quantity" || field === "unit_price") {
+        line.amount = Math.round(line.quantity * line.unit_price * 100) / 100;
+      }
+      next[idx] = line;
+      return next;
+    });
+  };
+
+  const resetForm = () => {
+    setEditId(null);
+    setCustomerId("");
+    setInvoiceDate(format(new Date(), "yyyy-MM-dd"));
+    setDueDate("");
+    setNotes("");
+    setLines([emptyLine()]);
+    setErrors([]);
+  };
+
+  const openNew = () => {
+    resetForm();
+    setFormOpen(true);
+  };
+
+  const openEdit = async (id: string) => {
+    const inv = invoices.find((i) => i.id === id);
+    if (!inv) return;
+    setEditId(id);
+    setCustomerId(inv.customer_id ?? "");
+    setInvoiceDate(inv.invoice_date);
+    setDueDate(inv.due_date);
+    setNotes(inv.notes ?? "");
+
+    const invLines = invoiceLines.filter((l: any) => l.invoice_id === id);
+    setLines(
+      invLines.length > 0
+        ? invLines.map((l: any) => ({
+            id: l.id,
+            description: l.description,
+            quantity: Number(l.quantity),
+            unit_price: Number(l.unit_price),
+            amount: Number(l.amount),
+            account_id: l.account_id ?? "",
+          }))
+        : [emptyLine()]
+    );
+    setErrors([]);
+    setFormOpen(true);
+  };
+
+  /* ─── generate next invoice number ─── */
+  const nextInvoiceNumber = () => {
+    const nums = invoices
+      .map((i) => {
+        const m = i.invoice_number.match(/(\d+)$/);
+        return m ? parseInt(m[1]) : 0;
+      });
+    const max = nums.length > 0 ? Math.max(...nums) : 0;
+    return `INV-${String(max + 1).padStart(4, "0")}`;
+  };
+
+  /* ─── validate ─── */
+  const validate = () => {
+    const errs: string[] = [];
+    if (!customerId) errs.push("Select a customer");
+    if (!dueDate) errs.push("Due date is required");
+    if (lines.length === 0) errs.push("Add at least one line item");
+    lines.forEach((l, i) => {
+      if (!l.description) errs.push(`Line ${i + 1}: description required`);
+      if (l.quantity <= 0) errs.push(`Line ${i + 1}: quantity must be > 0`);
+      if (l.unit_price <= 0) errs.push(`Line ${i + 1}: unit price must be > 0`);
+    });
+    if (!arAccount) errs.push("No 'Accounts Receivable' account found in chart of accounts");
+    if (!vatAccount) errs.push("No VAT/Tax Payable liability account found");
+    setErrors(errs);
+    return errs.length === 0;
+  };
+
+  /* ─── save invoice + journal entry ─── */
+  const handleSave = useCallback(async () => {
+    if (!validate() || !tenantId || !user) return;
+    setSaving(true);
+    try {
+      const invoiceNumber = editId
+        ? invoices.find((i) => i.id === editId)!.invoice_number
+        : nextInvoiceNumber();
+
+      /* upsert invoice */
+      const invoicePayload = {
+        tenant_id: tenantId,
+        customer_id: customerId,
+        invoice_number: invoiceNumber,
+        invoice_date: invoiceDate,
+        due_date: dueDate,
+        notes: notes || null,
+        subtotal,
+        tax_amount: taxAmount,
+        total_amount: totalAmount,
+        status: "sent" as const,
+        created_by: user.id,
+      };
+
+      let invoiceId = editId;
+      if (editId) {
+        const { error } = await supabase.from("invoices").update(invoicePayload).eq("id", editId);
+        if (error) throw error;
+        /* delete old lines */
+        await supabase.from("invoice_lines" as any).delete().eq("invoice_id", editId);
+      } else {
+        const { data, error } = await supabase
+          .from("invoices")
+          .insert(invoicePayload)
+          .select("id")
+          .single();
+        if (error) throw error;
+        invoiceId = data.id;
+      }
+
+      /* insert lines */
+      const lineRows = lines.map((l) => ({
+        invoice_id: invoiceId!,
+        tenant_id: tenantId,
+        description: l.description,
+        quantity: l.quantity,
+        unit_price: l.unit_price,
+        amount: l.amount,
+        account_id: l.account_id || null,
+      }));
+      const { error: lineErr } = await supabase.from("invoice_lines" as any).insert(lineRows);
+      if (lineErr) throw lineErr;
+
+      /* create journal entry (AR) — only for new invoices */
+      if (!editId) {
+        const entryNum = `JE-INV-${invoiceNumber}`;
+        const { data: je, error: jeErr } = await supabase
+          .from("journal_entries")
+          .insert({
+            tenant_id: tenantId,
+            entry_number: entryNum,
+            entry_date: invoiceDate,
+            description: `Invoice ${invoiceNumber} — Accounts Receivable`,
+            status: "posted",
+            created_by: user.id,
+            posted_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+        if (jeErr) throw jeErr;
+
+        /* determine revenue account — use first line's account or first revenue account */
+        const revenueAccountId =
+          lines[0]?.account_id || revenueAccounts[0]?.id;
+
+        const journalLines: any[] = [
+          {
+            journal_entry_id: je.id,
+            tenant_id: tenantId,
+            account_id: arAccount!.id,
+            debit: totalAmount,
+            credit: 0,
+            description: `AR for Invoice ${invoiceNumber}`,
+          },
+        ];
+
+        /* group lines by account for revenue credits */
+        const accountGroups = new Map<string, number>();
+        for (const l of lines) {
+          const acctId = l.account_id || revenueAccountId;
+          if (acctId) {
+            accountGroups.set(acctId, (accountGroups.get(acctId) ?? 0) + l.amount);
+          }
+        }
+        for (const [acctId, amt] of accountGroups) {
+          journalLines.push({
+            journal_entry_id: je.id,
+            tenant_id: tenantId,
+            account_id: acctId,
+            debit: 0,
+            credit: amt,
+            description: `Revenue for Invoice ${invoiceNumber}`,
+          });
+        }
+
+        /* VAT line */
+        if (vatAccount && taxAmount > 0) {
+          journalLines.push({
+            journal_entry_id: je.id,
+            tenant_id: tenantId,
+            account_id: vatAccount.id,
+            debit: 0,
+            credit: taxAmount,
+            description: `VAT for Invoice ${invoiceNumber}`,
+          });
+        }
+
+        await supabase.from("journal_lines").insert(journalLines);
+
+        /* link journal entry to invoice */
+        await supabase
+          .from("invoices")
+          .update({ journal_entry_id: je.id })
+          .eq("id", invoiceId!);
+      }
+
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["invoice_lines"] });
+      qc.invalidateQueries({ queryKey: ["journal_entries"] });
+      toast({ title: editId ? "Invoice updated" : "Invoice created & posted" });
+      setFormOpen(false);
+      resetForm();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }, [tenantId, user, customerId, invoiceDate, dueDate, notes, lines, editId, subtotal, taxAmount, totalAmount]);
+
+  /* ─── record payment ─── */
+  const handleRecordPayment = async () => {
+    if (!paymentInvoiceId || !paymentBankId || !tenantId || !user) return;
+    const inv = invoices.find((i) => i.id === paymentInvoiceId);
+    if (!inv || !arAccount) return;
+
+    setSaving(true);
+    try {
+      const bankAcct = bankAccounts.find((b) => b.id === paymentBankId);
+      const bankChartAcct = accounts.find(
+        (a) => a.account_type === "asset" && a.name.toLowerCase().includes("bank")
+      );
+      if (!bankChartAcct) throw new Error("No Bank asset account found in chart of accounts");
+
+      const entryNum = `JE-PAY-${inv.invoice_number}`;
+      const { data: je, error: jeErr } = await supabase
+        .from("journal_entries")
+        .insert({
+          tenant_id: tenantId,
+          entry_number: entryNum,
+          entry_date: format(new Date(), "yyyy-MM-dd"),
+          description: `Payment received for Invoice ${inv.invoice_number}`,
+          status: "posted",
+          created_by: user.id,
+          posted_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      if (jeErr) throw jeErr;
+
+      await supabase.from("journal_lines").insert([
+        {
+          journal_entry_id: je.id,
+          tenant_id: tenantId,
+          account_id: bankChartAcct.id,
+          debit: Number(inv.total_amount),
+          credit: 0,
+          description: `Cash received — Invoice ${inv.invoice_number}`,
+        },
+        {
+          journal_entry_id: je.id,
+          tenant_id: tenantId,
+          account_id: arAccount.id,
+          debit: 0,
+          credit: Number(inv.total_amount),
+          description: `AR cleared — Invoice ${inv.invoice_number}`,
+        },
+      ]);
+
+      await supabase
+        .from("invoices")
+        .update({
+          payment_journal_entry_id: je.id,
+          amount_paid: inv.total_amount,
+          status: "paid",
+        } as any)
+        .eq("id", paymentInvoiceId);
+
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["journal_entries"] });
+      toast({ title: "Payment recorded", description: `Invoice ${inv.invoice_number} marked as paid` });
+      setPaymentOpen(false);
+      setPaymentInvoiceId(null);
+      setPaymentBankId("");
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ─── PDF export ─── */
+  const exportPdf = async () => {
+    if (!previewRef.current) return;
+    const canvas = await html2canvas(previewRef.current, { scale: 2 });
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const w = pdf.internal.pageSize.getWidth();
+    const h = (canvas.height * w) / canvas.width;
+    pdf.addImage(imgData, "PNG", 0, 0, w, h);
+    const inv = invoices.find((i) => i.id === previewInvoiceId);
+    pdf.save(`${inv?.invoice_number ?? "invoice"}.pdf`);
+  };
+
+  /* ─── filter ─── */
+  const filtered = invoices.filter((inv) => {
+    const matchSearch =
+      inv.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
+      (inv.customers as any)?.name?.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === "all" || inv.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  /* ─── preview data ─── */
+  const previewInvoice = invoices.find((i) => i.id === previewInvoiceId);
+  const previewLines = invoiceLines.filter((l: any) => l.invoice_id === previewInvoiceId);
+
+  /* ═══════════════════════════ RENDER ═══════════════════════════ */
+  return (
+    <div className="p-6 lg:p-8 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Invoices</h1>
+          <p className="text-sm text-muted-foreground">Create and manage customer invoices</p>
+        </div>
+        <Button onClick={openNew}>
+          <Plus className="h-4 w-4 mr-1" /> New Invoice
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search invoices…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="sent">Sent</SelectItem>
+            <SelectItem value="paid">Paid</SelectItem>
+            <SelectItem value="overdue">Overdue</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Invoice List */}
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice #</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Loading…
+                  </TableCell>
+                </TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    No invoices found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filtered.map((inv) => (
+                  <TableRow key={inv.id}>
+                    <TableCell className="font-medium">{inv.invoice_number}</TableCell>
+                    <TableCell>{(inv.customers as any)?.name ?? "—"}</TableCell>
+                    <TableCell>{inv.invoice_date}</TableCell>
+                    <TableCell>{inv.due_date}</TableCell>
+                    <TableCell>
+                      <Badge className={statusColors[inv.status] ?? ""} variant="secondary">
+                        {inv.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono">{fmt(Number(inv.total_amount))}</TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setPreviewInvoiceId(inv.id);
+                          setPreviewOpen(true);
+                        }}
+                        title="Preview"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      {(inv.status === "sent" || inv.status === "overdue") && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setPaymentInvoiceId(inv.id);
+                            setPaymentBankId("");
+                            setPaymentOpen(true);
+                          }}
+                          title="Record Payment"
+                        >
+                          <CreditCard className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {inv.status === "draft" && (
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(inv.id)} title="Edit">
+                          <Search className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* ═══ Invoice Form Dialog ═══ */}
+      <Dialog open={formOpen} onOpenChange={(o) => { if (!o) resetForm(); setFormOpen(o); }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editId ? "Edit Invoice" : "New Invoice"}</DialogTitle>
+            <DialogDescription>
+              {editId ? "Update invoice details" : "Create a new invoice and auto-generate journal entries"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Customer</Label>
+              <Select value={customerId} onValueChange={setCustomerId}>
+                <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
+                <SelectContent>
+                  {customers.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Invoice Date</Label>
+              <Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Due Date</Label>
+              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Optional notes…" />
+            </div>
+          </div>
+
+          {/* Line items */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-base font-semibold">Line Items</Label>
+              <Button variant="outline" size="sm" onClick={() => setLines((p) => [...p, emptyLine()])}>
+                <Plus className="h-3 w-3 mr-1" /> Add Line
+              </Button>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[35%]">Description</TableHead>
+                  <TableHead>Account</TableHead>
+                  <TableHead className="w-20">Qty</TableHead>
+                  <TableHead className="w-28">Unit Price</TableHead>
+                  <TableHead className="w-28 text-right">Amount</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lines.map((line, idx) => (
+                  <TableRow key={line.id}>
+                    <TableCell className="p-1">
+                      <Input
+                        value={line.description}
+                        onChange={(e) => updateLine(idx, "description", e.target.value)}
+                        placeholder="Description"
+                      />
+                    </TableCell>
+                    <TableCell className="p-1">
+                      <Select value={line.account_id} onValueChange={(v) => updateLine(idx, "account_id", v)}>
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue placeholder="Account" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {revenueAccounts.map((a) => (
+                            <SelectItem key={a.id} value={a.id}>
+                              {a.code} — {a.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="p-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={line.quantity}
+                        onChange={(e) => updateLine(idx, "quantity", Number(e.target.value))}
+                      />
+                    </TableCell>
+                    <TableCell className="p-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={line.unit_price}
+                        onChange={(e) => updateLine(idx, "unit_price", Number(e.target.value))}
+                      />
+                    </TableCell>
+                    <TableCell className="p-1 text-right font-mono">{fmt(line.amount)}</TableCell>
+                    <TableCell className="p-1">
+                      {lines.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setLines((p) => p.filter((_, i) => i !== idx))}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            {/* Totals */}
+            <div className="flex flex-col items-end mt-3 space-y-1 text-sm">
+              <div className="flex gap-8">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="font-mono w-28 text-right">{fmt(subtotal)}</span>
+              </div>
+              <div className="flex gap-8">
+                <span className="text-muted-foreground">VAT (20%)</span>
+                <span className="font-mono w-28 text-right">{fmt(taxAmount)}</span>
+              </div>
+              <div className="flex gap-8 font-bold text-base border-t border-border pt-1">
+                <span>Total</span>
+                <span className="font-mono w-28 text-right">{fmt(totalAmount)}</span>
+              </div>
+            </div>
+          </div>
+
+          {errors.length > 0 && (
+            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive space-y-1">
+              {errors.map((e, i) => <p key={i}>• {e}</p>)}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : editId ? "Update Invoice" : "Create & Post Invoice"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ Payment Dialog ═══ */}
+      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>
+              Select the bank account that received the payment for invoice{" "}
+              {invoices.find((i) => i.id === paymentInvoiceId)?.invoice_number}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Label>Bank Account</Label>
+            <Select value={paymentBankId} onValueChange={setPaymentBankId}>
+              <SelectTrigger><SelectValue placeholder="Select bank account" /></SelectTrigger>
+              <SelectContent>
+                {bankAccounts.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name} {b.institution ? `(${b.institution})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">
+              Amount: <span className="font-mono font-semibold">
+                {fmt(Number(invoices.find((i) => i.id === paymentInvoiceId)?.total_amount ?? 0))}
+              </span>
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button>
+            <Button onClick={handleRecordPayment} disabled={!paymentBankId || saving}>
+              {saving ? "Recording…" : "Confirm Payment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ Invoice Preview Dialog ═══ */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Invoice Preview</DialogTitle>
+            <DialogDescription>
+              Preview and export invoice {previewInvoice?.invoice_number}
+            </DialogDescription>
+          </DialogHeader>
+
+          {previewInvoice && (
+            <>
+              <div ref={previewRef} className="bg-background p-8 rounded-lg border border-border">
+                {/* Company header */}
+                <div className="flex justify-between items-start mb-8">
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">{tenant?.name ?? "Company"}</h2>
+                    {tenant?.address && <p className="text-sm text-muted-foreground mt-1">{tenant.address}</p>}
+                    {tenant?.tax_id && <p className="text-sm text-muted-foreground">Tax ID: {tenant.tax_id}</p>}
+                  </div>
+                  <div className="text-right">
+                    <h3 className="text-2xl font-bold text-foreground">INVOICE</h3>
+                    <p className="text-sm font-medium text-muted-foreground mt-1">
+                      {previewInvoice.invoice_number}
+                    </p>
+                    <Badge className={statusColors[previewInvoice.status] ?? ""} variant="secondary">
+                      {previewInvoice.status.toUpperCase()}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Dates & customer */}
+                <div className="grid grid-cols-2 gap-6 mb-8">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Bill To</p>
+                    <p className="font-medium text-foreground">{(previewInvoice.customers as any)?.name}</p>
+                    {(previewInvoice.customers as any)?.email && (
+                      <p className="text-sm text-muted-foreground">{(previewInvoice.customers as any).email}</p>
+                    )}
+                    {(previewInvoice.customers as any)?.address && (
+                      <p className="text-sm text-muted-foreground">{(previewInvoice.customers as any).address}</p>
+                    )}
+                  </div>
+                  <div className="text-right space-y-1">
+                    <p className="text-sm">
+                      <span className="text-muted-foreground">Date: </span>
+                      <span className="font-medium">{previewInvoice.invoice_date}</span>
+                    </p>
+                    <p className="text-sm">
+                      <span className="text-muted-foreground">Due: </span>
+                      <span className="font-medium">{previewInvoice.due_date}</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Line items */}
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Unit Price</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewLines.map((l: any) => (
+                      <TableRow key={l.id}>
+                        <TableCell>{l.description}</TableCell>
+                        <TableCell className="text-right">{Number(l.quantity)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(Number(l.unit_price))}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(Number(l.amount))}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {/* Totals */}
+                <div className="flex flex-col items-end mt-6 space-y-1 text-sm">
+                  <div className="flex gap-12">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="font-mono w-28 text-right">{fmt(Number(previewInvoice.subtotal))}</span>
+                  </div>
+                  <div className="flex gap-12">
+                    <span className="text-muted-foreground">VAT (20%)</span>
+                    <span className="font-mono w-28 text-right">{fmt(Number(previewInvoice.tax_amount))}</span>
+                  </div>
+                  <div className="flex gap-12 font-bold text-lg border-t border-border pt-2">
+                    <span>Total Due</span>
+                    <span className="font-mono w-28 text-right">{fmt(Number(previewInvoice.total_amount))}</span>
+                  </div>
+                  {Number(previewInvoice.amount_paid) > 0 && (
+                    <div className="flex gap-12 text-emerald-600">
+                      <span>Paid</span>
+                      <span className="font-mono w-28 text-right">{fmt(Number(previewInvoice.amount_paid))}</span>
+                    </div>
+                  )}
+                </div>
+
+                {previewInvoice.notes && (
+                  <div className="mt-6 pt-4 border-t border-border">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Notes</p>
+                    <p className="text-sm text-muted-foreground">{previewInvoice.notes}</p>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => window.print()}>
+                  <Printer className="h-4 w-4 mr-1" /> Print
+                </Button>
+                <Button onClick={exportPdf}>Export PDF</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default Invoices;

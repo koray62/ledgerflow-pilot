@@ -20,7 +20,7 @@ const navItems = [
   { title: "Cash Flow", icon: TrendingUp, path: "/dashboard/cashflow" },
   { title: "Performance", icon: Activity, path: "/dashboard/performance" },
   { title: "Vendors & Customers", icon: Building2, path: "/dashboard/contacts" },
-  
+  { title: "Invoices", icon: Receipt, path: "/dashboard/invoices" },
   { title: "Team", icon: Users, path: "/dashboard/team" },
   { title: "Settings", icon: Settings, path: "/dashboard/settings" },
 ];
