@@ -399,22 +399,44 @@ export default function BankAccounts() {
     if (!parsedTxs.length || !chartAccounts.length) return;
     setAiLoading(true);
     try {
-      // Merge detailed description for AI context, but keep parsedTxs unchanged for storage
-      const txsForAI = parsedTxs.map(tx => ({
-        date: tx.date,
-        description: tx.detailedDescription ? `${tx.description} | ${tx.detailedDescription}` : tx.description,
-        amount: tx.amount,
-      }));
+      // Build index map: only send transactions whose date is NOT in a closed fiscal year
+      const openIndexes: number[] = [];
+      const txsForAI: { date: string; description: string; amount: number }[] = [];
+      parsedTxs.forEach((tx, i) => {
+        const txDate = tx.date || "";
+        if (txDate && isDateInClosedYear(txDate)) return; // skip closed-year transactions
+        openIndexes.push(i);
+        txsForAI.push({
+          date: tx.date,
+          description: tx.detailedDescription ? `${tx.description} | ${tx.detailedDescription}` : tx.description,
+          amount: tx.amount,
+        });
+      });
+
+      const skippedCount = parsedTxs.length - openIndexes.length;
+
+      if (!txsForAI.length) {
+        toast({ title: "No eligible transactions", description: "All transactions fall in closed fiscal years.", variant: "destructive" });
+        setSuggestions([]);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("process-bank-csv", {
         body: { transactions: txsForAI, accounts: chartAccounts, vendors, customers },
       });
       if (error) throw error;
+      // Map AI transactionIndex back to original parsedTxs index
       const sug: AISuggestion[] = (data.suggestions || []).map((s: any) => ({
         ...s,
+        transactionIndex: openIndexes[s.transactionIndex],
         status: "pending" as const,
-        originalTx: parsedTxs[s.transactionIndex],
+        originalTx: parsedTxs[openIndexes[s.transactionIndex]],
       }));
       setSuggestions(sug);
+
+      if (skippedCount > 0) {
+        toast({ title: `${skippedCount} transaction(s) skipped`, description: "Transactions in closed fiscal years were excluded." });
+      }
     } catch (err: any) {
       toast({ title: "AI processing failed", description: err.message, variant: "destructive" });
     } finally {
