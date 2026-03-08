@@ -15,6 +15,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 
 /* ------------------------------------------------------------------ */
 /* Shared form fields                                                  */
@@ -186,6 +187,7 @@ interface ContactListProps {
 
 const ContactList = ({ type }: ContactListProps) => {
   const { tenantId } = useTenant();
+  const { can } = usePermissions();
   const queryClient = useQueryClient();
   const table = type === "vendor" ? "vendors" : "customers";
   const label = type === "vendor" ? "Vendor" : "Customer";
@@ -270,9 +272,11 @@ const ContactList = ({ type }: ContactListProps) => {
             className="pl-9 h-9 text-sm"
           />
         </div>
-        <Button size="sm" className="gap-1.5" onClick={openNew}>
-          <Plus className="h-3.5 w-3.5" /> Add {label}
-        </Button>
+        {can("contacts.edit") && (
+          <Button size="sm" className="gap-1.5" onClick={openNew}>
+            <Plus className="h-3.5 w-3.5" /> Add {label}
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -306,21 +310,25 @@ const ContactList = ({ type }: ContactListProps) => {
                   <td className="px-4 py-3 text-right text-muted-foreground hidden lg:table-cell">{item.payment_terms ?? 30}d</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}>
-                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => handleDelete(item.id)}
-                        disabled={deletingId === item.id}
-                      >
-                        {deletingId === item.id
-                          ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                          : <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        }
-                      </Button>
+                      {can("contacts.edit") && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}>
+                          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      )}
+                      {can("contacts.delete") && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleDelete(item.id)}
+                          disabled={deletingId === item.id}
+                        >
+                          {deletingId === item.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            : <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          }
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>

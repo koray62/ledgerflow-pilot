@@ -21,6 +21,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 import { formatCurrency } from "@/lib/utils";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type AccountType = Database["public"]["Enums"]["account_type"];
 
@@ -89,6 +90,7 @@ function flattenTree(
 const ChartOfAccounts = () => {
   const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
+  const { can } = usePermissions();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -423,9 +425,11 @@ const ChartOfAccounts = () => {
           <h1 className="text-2xl font-bold text-foreground">Chart of Accounts</h1>
           <p className="text-sm text-muted-foreground">Manage your account structure</p>
         </div>
-        <Button variant="hero" size="sm" className="gap-2" onClick={() => { resetForm(); setDialogOpen(true); }}>
-          <Plus className="h-4 w-4" /> Add Account
-        </Button>
+        {can("accounts.edit") && (
+          <Button variant="hero" size="sm" className="gap-2" onClick={() => { resetForm(); setDialogOpen(true); }}>
+            <Plus className="h-4 w-4" /> Add Account
+          </Button>
+        )}
       </div>
 
       {/* Add/Edit Account Dialog */}
@@ -718,33 +722,39 @@ const ChartOfAccounts = () => {
                         </td>
                         <td className="py-3 text-right">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                              title="Edit account"
-                              onClick={(e) => { e.stopPropagation(); openEditAccount(acc); }}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                              title="Delete account"
-                              onClick={(e) => { e.stopPropagation(); handleDeleteClick(acc); }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                              title="Add sub-account"
-                              onClick={(e) => { e.stopPropagation(); openAddSubAccount(acc); }}
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                            </Button>
+                            {can("accounts.edit") && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0"
+                                  title="Edit account"
+                                  onClick={(e) => { e.stopPropagation(); openEditAccount(acc); }}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0"
+                                  title="Add sub-account"
+                                  onClick={(e) => { e.stopPropagation(); openAddSubAccount(acc); }}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
+                            {can("accounts.delete") && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                title="Delete account"
+                                onClick={(e) => { e.stopPropagation(); handleDeleteClick(acc); }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>

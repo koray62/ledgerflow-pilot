@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePermissions } from "@/hooks/usePermissions";
 import JournalEntryForm from "@/components/dashboard/JournalEntryForm";
 import OCRUpload from "./OCRUpload";
 
@@ -22,6 +23,7 @@ const statusColors: Record<string, string> = {
 
 const JournalEntries = () => {
   const { tenantId, defaultCurrency } = useTenant();
+  const { can } = usePermissions();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
@@ -119,9 +121,11 @@ const JournalEntries = () => {
 
         <TabsContent value="manual">
           <div className="mb-4 flex justify-end">
-            <Button variant="hero" size="sm" className="gap-2" onClick={() => { setEditEntryId(null); setFormOpen(true); }}>
-              <Plus className="h-4 w-4" /> New Entry
-            </Button>
+            {can("journal_entries.edit") && (
+              <Button variant="hero" size="sm" className="gap-2" onClick={() => { setEditEntryId(null); setFormOpen(true); }}>
+                <Plus className="h-4 w-4" /> New Entry
+              </Button>
+            )}
           </div>
           <Card>
             <CardHeader className="pb-3">
