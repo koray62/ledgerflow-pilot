@@ -674,6 +674,17 @@ const Invoices = () => {
                           <CreditCard className="h-4 w-4" />
                         </Button>
                       )}
+                      {(inv.status === "sent" || inv.status === "overdue") && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleCancelInvoice(inv.id)}
+                          title="Cancel Invoice"
+                          disabled={saving}
+                        >
+                          <XCircle className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
                       {inv.status === "draft" && (
                         <Button variant="ghost" size="icon" onClick={() => openEdit(inv.id)} title="Edit">
                           <Search className="h-4 w-4" />
