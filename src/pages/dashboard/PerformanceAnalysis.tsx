@@ -362,10 +362,22 @@ const PerformanceAnalysis = () => {
       const contentW = pageW - margin * 2;
       let y = margin;
 
+      // Transliterate non-WinAnsi chars (Turkish, etc.) to closest Latin equivalents
+      const pdfSafe = (text: string) => {
+        const map: Record<string, string> = {
+          'ğ': 'g', 'Ğ': 'G', 'ı': 'i', 'İ': 'I', 'ş': 's', 'Ş': 'S',
+          'ç': 'c', 'Ç': 'C', 'ö': 'o', 'Ö': 'O', 'ü': 'u', 'Ü': 'U',
+          'ä': 'a', 'Ä': 'A', 'ß': 'ss', 'ñ': 'n', 'Ñ': 'N',
+          'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+          'à': 'a', 'è': 'e', 'ì': 'i', 'ò': 'o', 'ù': 'u',
+          'â': 'a', 'ê': 'e', 'î': 'i', 'ô': 'o', 'û': 'u',
+        };
+        return text.replace(/[^\x20-\x7E]/g, (ch) => map[ch] ?? '');
+      };
+
       // --- Company Header ---
       if (tenantName) {
-        // jsPDF built-in fonts only support WinAnsi encoding - sanitize text
-        const safeName = tenantName.replace(/[^\x20-\x7E]/g, '');
+        const safeName = pdfSafe(tenantName);
         pdf.setFontSize(11);
         pdf.setFont("helvetica", "bold");
         pdf.setTextColor(80);
@@ -597,7 +609,7 @@ const PerformanceAnalysis = () => {
       y += 4;
 
       // --- Footer ---
-      const safeFooterName = (tenantName || "LedgerPilot").replace(/[^\x20-\x7E]/g, '');
+      const safeFooterName = pdfSafe(tenantName || "LedgerPilot");
       const totalPages = pdf.getNumberOfPages();
       const pageH = pdf.internal.pageSize.getHeight();
       for (let p = 1; p <= totalPages; p++) {
