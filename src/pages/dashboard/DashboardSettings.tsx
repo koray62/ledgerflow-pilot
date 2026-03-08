@@ -1,10 +1,79 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
+import { useTenant } from "@/hooks/useTenant";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 const DashboardSettings = () => {
+  const { tenantId } = useTenant();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [fiscalYearEnd, setFiscalYearEnd] = useState("12");
+  const [saving, setSaving] = useState(false);
+
+  const { data: tenant, isLoading } = useQuery({
+    queryKey: ["tenant-settings", tenantId],
+    enabled: !!tenantId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("name, industry, fiscal_year_end")
+        .eq("id", tenantId!)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (tenant) {
+      setName(tenant.name ?? "");
+      setIndustry(tenant.industry ?? "");
+      setFiscalYearEnd(String(tenant.fiscal_year_end ?? 12));
+    }
+  }, [tenant]);
+
+  const handleSave = async () => {
+    if (!tenantId) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("tenants")
+      .update({
+        name: name.trim(),
+        industry: industry.trim() || null,
+        fiscal_year_end: parseInt(fiscalYearEnd, 10),
+      })
+      .eq("id", tenantId);
+    setSaving(false);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Settings saved" });
+      queryClient.invalidateQueries({ queryKey: ["tenant-settings", tenantId] });
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-6">
@@ -20,18 +89,30 @@ const DashboardSettings = () => {
             <div className="space-y-4">
               <div>
                 <Label className="text-xs">Company Name</Label>
-                <Input defaultValue="Acme Inc." className="mt-1" />
+                <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
               </div>
               <div>
                 <Label className="text-xs">Industry</Label>
-                <Input defaultValue="Technology / SaaS" className="mt-1" />
+                <Input value={industry} onChange={(e) => setIndustry(e.target.value)} className="mt-1" />
               </div>
               <div>
                 <Label className="text-xs">Fiscal Year End</Label>
-                <Input defaultValue="December" className="mt-1" />
+                <Select value={fiscalYearEnd} onValueChange={setFiscalYearEnd}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTHS.map((m, i) => (
+                      <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <Button variant="hero" size="sm" className="mt-4">Save Changes</Button>
+            <Button variant="hero" size="sm" className="mt-4" onClick={handleSave} disabled={saving || !name.trim()}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
           </CardContent>
         </Card>
 
