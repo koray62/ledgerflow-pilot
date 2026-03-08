@@ -419,6 +419,7 @@ const CashFlow = () => {
         { label: "Net Income (Accrual)", value: formatCurrency(accrualNetIncome), icon: TrendingUp },
         { label: "ΔAR (Working Capital)", value: formatCurrency(accrualARChange), icon: Clock },
         { label: "ΔDeferred Revenue", value: formatCurrency(accrualDeferredRevChange), icon: DollarSign },
+        { label: "ΔSales Tax Payable", value: formatCurrency(accrualTaxPayableChange), icon: DollarSign },
         { label: "Net Cash from Ops", value: formatCurrency(accrualNetCashFromOps), icon: DollarSign },
       ];
 
