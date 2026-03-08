@@ -171,6 +171,13 @@ const Invoices = () => {
   const arAccount = accounts.find(
     (a) => a.account_type === "asset" && a.name.toLowerCase().includes("receivable")
   );
+  const cashParent = accounts.find((a) => a.account_type === "asset" && a.code === "1000");
+  const cashBankAccounts = accounts.filter(
+    (a) =>
+      a.account_type === "asset" &&
+      a.code !== "1000" &&
+      (a.code.startsWith("1000") || a.code.startsWith("1010") || (cashParent && a.parent_id === cashParent.id))
+  );
   const vatAccount = accounts.find(
     (a) =>
       a.account_type === "liability" &&
@@ -409,11 +416,8 @@ const Invoices = () => {
 
     setSaving(true);
     try {
-      const bankAcct = bankAccounts.find((b) => b.id === paymentBankId);
-      const bankChartAcct = accounts.find(
-        (a) => a.account_type === "asset" && a.name.toLowerCase().includes("bank")
-      );
-      if (!bankChartAcct) throw new Error("No Bank asset account found in chart of accounts");
+      const selectedCashAcct = accounts.find((a) => a.id === paymentBankId);
+      if (!selectedCashAcct) throw new Error("Selected cash/bank account not found in chart of accounts");
 
       const entryNum = `JE-PAY-${inv.invoice_number}`;
       const { data: je, error: jeErr } = await supabase
@@ -435,7 +439,7 @@ const Invoices = () => {
         {
           journal_entry_id: je.id,
           tenant_id: tenantId,
-          account_id: bankChartAcct.id,
+          account_id: selectedCashAcct.id,
           debit: Number(inv.total_amount),
           credit: 0,
           description: `Cash received — Invoice ${inv.invoice_number}`,
@@ -798,13 +802,13 @@ const Invoices = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Label>Bank Account</Label>
+            <Label>Cash / Bank Account</Label>
             <Select value={paymentBankId} onValueChange={setPaymentBankId}>
-              <SelectTrigger><SelectValue placeholder="Select bank account" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select cash/bank account" /></SelectTrigger>
               <SelectContent>
-                {bankAccounts.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name} {b.institution ? `(${b.institution})` : ""}
+                {cashBankAccounts.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.code} — {a.name}
                   </SelectItem>
                 ))}
               </SelectContent>
