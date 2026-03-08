@@ -10,11 +10,14 @@ import {
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  ResponsiveContainer, BarChart, Bar, LineChart, Line,
+  ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
 import { TrendingUp, TrendingDown, DollarSign, Percent, Shield, Activity, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import type { Database } from "@/integrations/supabase/types";
 
 type AccountType = Database["public"]["Enums"]["account_type"];
@@ -33,6 +36,7 @@ const pctFmt = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = [CURRENT_YEAR - 3, CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR];
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const fetchLineTotals = async (tenantId: string, startStr: string, endStr: string) => {
   const { data: entries } = await supabase
@@ -54,6 +58,37 @@ const fetchLineTotals = async (tenantId: string, startStr: string, endStr: strin
     .in("journal_entry_id", entries.map((e) => e.id));
 
   return data ?? [];
+};
+
+const fetchMonthlyLineTotals = async (tenantId: string, year: number) => {
+  const { data: entries } = await supabase
+    .from("journal_entries")
+    .select("id, entry_date")
+    .eq("tenant_id", tenantId)
+    .eq("status", "posted")
+    .is("deleted_at", null)
+    .gte("entry_date", `${year}-01-01`)
+    .lte("entry_date", `${year}-12-31`);
+
+  if (!entries || entries.length === 0) return [];
+
+  const entryIds = entries.map((e) => e.id);
+  const { data: lines } = await supabase
+    .from("journal_lines")
+    .select("account_id, debit, credit, journal_entry_id")
+    .eq("tenant_id", tenantId)
+    .is("deleted_at", null)
+    .in("journal_entry_id", entryIds);
+
+  const entryMonthMap = new Map<string, number>();
+  for (const e of entries) {
+    entryMonthMap.set(e.id, new Date(e.entry_date).getMonth());
+  }
+
+  return (lines ?? []).map((l) => ({
+    ...l,
+    month: entryMonthMap.get(l.journal_entry_id) ?? 0,
+  }));
 };
 
 interface YearlyData {
@@ -78,6 +113,7 @@ const PerformanceAnalysis = () => {
   const { tenantId, tenantName } = useTenant();
   const chartsRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [drillYear, setDrillYear] = useState<number>(CURRENT_YEAR);
 
   // Fetch accounts
   const { data: accounts = [], isLoading: loadingAccounts } = useQuery({
@@ -102,6 +138,13 @@ const PerformanceAnalysis = () => {
       queryFn: () => fetchLineTotals(tenantId!, `${year}-01-01`, `${year}-12-31`),
     })
   );
+
+  // Monthly drill-down query
+  const { data: monthlyLines = [], isLoading: loadingMonthly } = useQuery({
+    queryKey: ["perf-monthly", tenantId, drillYear],
+    enabled: !!tenantId,
+    queryFn: () => fetchMonthlyLineTotals(tenantId!, drillYear),
+  });
 
   // Cash balance (current snapshot)
   const { data: cashBalance = 0 } = useQuery({
@@ -174,7 +217,6 @@ const PerformanceAnalysis = () => {
       const expenseRatio = revenue !== 0 ? (expenses / revenue) * 100 : 0;
       const monthsElapsed = year === CURRENT_YEAR ? new Date().getMonth() + 1 : 12;
 
-      // Quick Ratio: use current snapshot for current year, estimate for historical
       const arBal = arData.reduce((s, inv) => s + (Number(inv.total_amount) - Number(inv.amount_paid)), 0);
       const apBal = apData.reduce((s, b) => s + (Number(b.total_amount) - Number(b.amount_paid)), 0);
 
@@ -197,7 +239,6 @@ const PerformanceAnalysis = () => {
       };
     });
 
-    // Compute growth rates & operating leverage
     for (let i = 1; i < results.length; i++) {
       const prev = results[i - 1];
       const curr = results[i];
@@ -214,6 +255,29 @@ const PerformanceAnalysis = () => {
 
     return results;
   }, [isLoading, accounts, yearQueries, cashBalance, arData, apData]);
+
+  // Monthly drill-down data
+  const monthlyData = useMemo(() => {
+    if (accounts.length === 0 || monthlyLines.length === 0) return [];
+
+    const revenueAccIds = new Set(accounts.filter((a) => a.account_type === "revenue").map((a) => a.id));
+    const expenseAccIds = new Set(accounts.filter((a) => a.account_type === "expense").map((a) => a.id));
+
+    return MONTH_NAMES.map((name, monthIdx) => {
+      const lines = monthlyLines.filter((l) => l.month === monthIdx);
+      let revenue = 0;
+      let expenses = 0;
+      for (const l of lines) {
+        const d = Number(l.debit);
+        const c = Number(l.credit);
+        if (revenueAccIds.has(l.account_id)) revenue += c - d;
+        if (expenseAccIds.has(l.account_id)) expenses += d - c;
+      }
+      const netIncome = revenue - expenses;
+      const margin = revenue !== 0 ? (netIncome / revenue) * 100 : 0;
+      return { month: name, revenue, expenses, netIncome, margin };
+    });
+  }, [accounts, monthlyLines]);
 
   // CAGR calculation
   const cagr = useMemo(() => {
@@ -234,11 +298,9 @@ const PerformanceAnalysis = () => {
     };
   }, [yearlyData]);
 
-  // Current year data for KPI cards
   const current = yearlyData.find((d) => d.year === CURRENT_YEAR);
   const previous = yearlyData.find((d) => d.year === CURRENT_YEAR - 1);
 
-  // Chart data
   const chartData = yearlyData.map((d) => ({
     year: d.year.toString(),
     Revenue: d.revenue,
@@ -347,7 +409,15 @@ const PerformanceAnalysis = () => {
     },
   ];
 
+  // Monthly totals for drill-down
+  const monthlyTotals = useMemo(() => {
+    const totalRev = monthlyData.reduce((s, m) => s + m.revenue, 0);
+    const totalExp = monthlyData.reduce((s, m) => s + m.expenses, 0);
+    const totalNet = totalRev - totalExp;
+    return { revenue: totalRev, expenses: totalExp, netIncome: totalNet };
+  }, [monthlyData]);
 
+  // PDF Export
   const handleExportPDF = async () => {
     setExporting(true);
     try {
@@ -362,7 +432,6 @@ const PerformanceAnalysis = () => {
       const contentW = pageW - margin * 2;
       let y = margin;
 
-      // Transliterate non-WinAnsi chars (Turkish, etc.) to closest Latin equivalents
       const pdfSafe = (text: string) => {
         const map: Record<string, string> = {
           'ğ': 'g', 'Ğ': 'G', 'ı': 'i', 'İ': 'I', 'ş': 's', 'Ş': 'S',
@@ -398,7 +467,6 @@ const PerformanceAnalysis = () => {
       pdf.setTextColor(0);
       y += 12;
 
-      // --- Divider ---
       pdf.setDrawColor(200);
       pdf.setLineWidth(0.3);
       pdf.line(margin, y, margin + contentW, y);
@@ -437,7 +505,6 @@ const PerformanceAnalysis = () => {
 
       // --- Capture charts ---
       if (chartsRef.current) {
-        // Make all tab content visible for capture
         const tabContents = chartsRef.current.querySelectorAll('[data-state]');
         const originalStates: { el: Element; state: string | null }[] = [];
         tabContents.forEach((el) => {
@@ -448,7 +515,6 @@ const PerformanceAnalysis = () => {
           }
         });
 
-        // Capture overview charts
         const overviewSection = chartsRef.current.querySelector('[data-pdf="overview"]');
         if (overviewSection) {
           const canvas = await html2canvas(overviewSection as HTMLElement, {
@@ -472,7 +538,6 @@ const PerformanceAnalysis = () => {
           y += imgH + 8;
         }
 
-        // Restore tab states
         originalStates.forEach(({ el, state }) => {
           if (state) el.setAttribute('data-state', state);
         });
@@ -488,7 +553,6 @@ const PerformanceAnalysis = () => {
       pdf.text("Detailed Year-by-Year Comparison", margin, y);
       y += 7;
 
-      // Table header
       const cols = ["Metric", ...YEARS.map(String), "CAGR"];
       const colWidths = [50, ...YEARS.map(() => 28), 22];
       pdf.setFontSize(8);
@@ -501,7 +565,6 @@ const PerformanceAnalysis = () => {
       });
       y += 8;
 
-      // Table rows
       pdf.setFont("helvetica", "normal");
       metricRows.forEach((row, ri) => {
         if (y + 7 > pdf.internal.pageSize.getHeight() - margin) {
@@ -512,17 +575,14 @@ const PerformanceAnalysis = () => {
           pdf.setFillColor(248, 248, 252);
           pdf.rect(margin, y - 1, contentW, 6, "F");
         }
-        // Metric label
         pdf.setTextColor(40);
         pdf.text(row.label, margin + 1, y + 3.5);
-        // Year values
         YEARS.forEach((yr, yi) => {
           const d = yearlyData.find((yd) => yd.year === yr);
           const val = d ? (d as any)[row.key] : null;
           const x = margin + colWidths.slice(0, yi + 1).reduce((s, w) => s + w, 0) + colWidths[yi + 1] - 1;
           pdf.text(row.format(val), x, y + 3.5, { align: "right" });
         });
-        // CAGR
         const cagrX = margin + contentW - 1;
         let cagrVal = "—";
         if (row.key === "revenue" && cagr.revenue !== null) cagrVal = `${cagr.revenue.toFixed(1)}%`;
@@ -534,17 +594,6 @@ const PerformanceAnalysis = () => {
         y += 6;
       });
       y += 6;
-
-      // --- Financial Ratios Summary ---
-      if (y + 40 > pdf.internal.pageSize.getHeight() - margin) {
-        pdf.addPage();
-        y = margin;
-      }
-      pdf.setFontSize(12);
-      pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(0);
-      pdf.text("Financial Ratios Summary", margin, y);
-      y += 7;
 
       // --- Financial Ratios as Table ---
       const ratioTableH = 8 + ratioCards.length * 6 + 2;
@@ -558,7 +607,6 @@ const PerformanceAnalysis = () => {
       pdf.text("Financial Ratios Summary", margin, y);
       y += 8;
 
-      // Table header
       const ratioCols = ["Ratio", ...YEARS.map(String)];
       const ratioColWidths = [52, ...YEARS.map(() => 32)];
       pdf.setFontSize(8);
@@ -572,22 +620,18 @@ const PerformanceAnalysis = () => {
       });
       y += 8;
 
-      // Table rows
       ratioCards.forEach((rc, ri) => {
         if (y + 7 > pdf.internal.pageSize.getHeight() - margin) {
           pdf.addPage();
           y = margin;
         }
-        // Alternating row background
         if (ri % 2 === 0) {
           pdf.setFillColor(248, 248, 252);
           pdf.rect(margin, y - 1, contentW, 6, "F");
         }
-        // Ratio name
         pdf.setFont("helvetica", "normal");
         pdf.setTextColor(40);
         pdf.text(rc.title, margin + 2, y + 3.5);
-        // Year values
         rc.values.forEach((v, vi) => {
           const x = margin + ratioColWidths.slice(0, vi + 1).reduce((s, w) => s + w, 0) + ratioColWidths[vi + 1] - 2;
           const formatted = rc.format(v.value as any);
@@ -597,7 +641,6 @@ const PerformanceAnalysis = () => {
         y += 6;
       });
 
-      // Description footnotes
       y += 3;
       pdf.setFontSize(6.5);
       pdf.setFont("helvetica", "italic");
@@ -614,12 +657,10 @@ const PerformanceAnalysis = () => {
       const pageH = pdf.internal.pageSize.getHeight();
       for (let p = 1; p <= totalPages; p++) {
         pdf.setPage(p);
-        // Classified banner
         pdf.setFontSize(7);
         pdf.setFont("helvetica", "bold");
         pdf.setTextColor(180, 40, 40);
         pdf.text("CONFIDENTIAL — CLASSIFIED INFORMATION", pageW / 2, pageH - 10, { align: "center" });
-        // Company + page info
         pdf.setFont("helvetica", "normal");
         pdf.setTextColor(160);
         pdf.text(
@@ -715,6 +756,7 @@ const PerformanceAnalysis = () => {
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="monthly">Monthly Drill-Down</TabsTrigger>
           <TabsTrigger value="table">Detailed Table</TabsTrigger>
           <TabsTrigger value="ratios">Financial Ratios</TabsTrigger>
         </TabsList>
@@ -791,7 +833,149 @@ const PerformanceAnalysis = () => {
           </div>
         </TabsContent>
 
-        {/* Tab 2: Detailed Table */}
+        {/* Tab 2: Monthly Drill-Down */}
+        <TabsContent value="monthly" className="space-y-6">
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-medium text-muted-foreground">Select Year:</p>
+            <Select value={drillYear.toString()} onValueChange={(v) => setDrillYear(Number(v))}>
+              <SelectTrigger className="w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {YEARS.map((y) => (
+                  <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {loadingMonthly ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)}
+            </div>
+          ) : (
+            <>
+              {/* Monthly summary cards */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-xs font-medium text-muted-foreground">Total Revenue ({drillYear})</p>
+                    <p className="mt-1 text-lg font-bold text-foreground">{fmt(monthlyTotals.revenue)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-xs font-medium text-muted-foreground">Total Expenses ({drillYear})</p>
+                    <p className="mt-1 text-lg font-bold text-foreground">{fmt(monthlyTotals.expenses)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-xs font-medium text-muted-foreground">Net Income ({drillYear})</p>
+                    <p className={`mt-1 text-lg font-bold ${monthlyTotals.netIncome >= 0 ? "text-success" : "text-destructive"}`}>
+                      {fmt(monthlyTotals.netIncome)}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Monthly Revenue vs Expenses chart */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Monthly Revenue vs Expenses</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={monthlyData} barGap={2}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                        <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                        <Tooltip
+                          contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                          formatter={(v: number) => [fmt(v)]}
+                        />
+                        <Legend />
+                        <Bar dataKey="revenue" name="Revenue" fill="hsl(var(--success))" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="expenses" name="Expenses" fill="hsl(var(--destructive))" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Net Income area chart */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Monthly Net Income</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <AreaChart data={monthlyData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                        <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                        <Tooltip
+                          contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                          formatter={(v: number) => [fmt(v)]}
+                        />
+                        <Area type="monotone" dataKey="netIncome" name="Net Income" stroke="hsl(var(--accent))" fill="hsl(var(--accent) / 0.15)" strokeWidth={2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Monthly data table */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Monthly Breakdown — {drillYear}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Month</TableHead>
+                          <TableHead className="text-right">Revenue</TableHead>
+                          <TableHead className="text-right">Expenses</TableHead>
+                          <TableHead className="text-right">Net Income</TableHead>
+                          <TableHead className="text-right">Margin %</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {monthlyData.map((m) => (
+                          <TableRow key={m.month}>
+                            <TableCell className="font-medium text-foreground">{m.month}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{fmt(m.revenue)}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{fmt(m.expenses)}</TableCell>
+                            <TableCell className={`text-right font-mono text-sm font-semibold ${m.netIncome >= 0 ? "text-success" : "text-destructive"}`}>
+                              {fmt(m.netIncome)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm">{m.margin.toFixed(1)}%</TableCell>
+                          </TableRow>
+                        ))}
+                        {/* Totals row */}
+                        <TableRow className="bg-muted/40 font-semibold">
+                          <TableCell className="font-bold text-foreground">Total</TableCell>
+                          <TableCell className="text-right font-mono text-sm font-bold">{fmt(monthlyTotals.revenue)}</TableCell>
+                          <TableCell className="text-right font-mono text-sm font-bold">{fmt(monthlyTotals.expenses)}</TableCell>
+                          <TableCell className={`text-right font-mono text-sm font-bold ${monthlyTotals.netIncome >= 0 ? "text-success" : "text-destructive"}`}>
+                            {fmt(monthlyTotals.netIncome)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm font-bold">
+                            {monthlyTotals.revenue !== 0 ? ((monthlyTotals.netIncome / monthlyTotals.revenue) * 100).toFixed(1) : "0.0"}%
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </TabsContent>
+
+        {/* Tab 3: Detailed Table */}
         <TabsContent value="table">
           <Card>
             <CardContent className="p-0">
@@ -834,7 +1018,7 @@ const PerformanceAnalysis = () => {
           </Card>
         </TabsContent>
 
-        {/* Tab 3: Financial Ratios */}
+        {/* Tab 4: Financial Ratios */}
         <TabsContent value="ratios" className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {ratioCards.map((rc) => {
