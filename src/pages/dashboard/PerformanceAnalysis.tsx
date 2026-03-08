@@ -304,6 +304,14 @@ const PerformanceAnalysis = () => {
     };
   }, [yearlyData]);
 
+  // Monthly totals for drill-down
+  const monthlyTotals = useMemo(() => {
+    const totalRev = monthlyData.reduce((s, m) => s + m.revenue, 0);
+    const totalExp = monthlyData.reduce((s, m) => s + m.expenses, 0);
+    const totalNet = totalRev - totalExp;
+    return { revenue: totalRev, expenses: totalExp, netIncome: totalNet };
+  }, [monthlyData]);
+
   const current = yearlyData.find((d) => d.year === CURRENT_YEAR);
   const previous = yearlyData.find((d) => d.year === CURRENT_YEAR - 1);
 
