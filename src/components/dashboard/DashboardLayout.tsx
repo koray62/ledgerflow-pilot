@@ -3,21 +3,28 @@ import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   BookOpen, LayoutDashboard, BookText, Receipt, TrendingUp,
   Building2, Users, CreditCard, FileText, Settings, LogOut,
-  ChevronLeft, Menu, Scale, BarChart3, Activity
+  ChevronLeft, Menu, Scale, BarChart3, Activity, ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { TenantProvider } from "@/hooks/useTenant";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const navItems = [
   { title: "Overview", icon: LayoutDashboard, path: "/dashboard" },
   { title: "Chart of Accounts", icon: BookText, path: "/dashboard/accounts" },
   { title: "Journal Entries", icon: FileText, path: "/dashboard/journal" },
   { title: "Bank Accounts", icon: CreditCard, path: "/dashboard/banks" },
+];
+
+const financialStatements = [
   { title: "Balance Sheet", icon: Scale, path: "/dashboard/balance-sheet" },
   { title: "Income Statement", icon: BarChart3, path: "/dashboard/income-statement" },
   { title: "Cash Flow", icon: TrendingUp, path: "/dashboard/cashflow" },
+];
+
+const navItemsBottom = [
   { title: "Performance", icon: Activity, path: "/dashboard/performance" },
   { title: "Vendors & Customers", icon: Building2, path: "/dashboard/contacts" },
   { title: "Invoices", icon: Receipt, path: "/dashboard/invoices" },
