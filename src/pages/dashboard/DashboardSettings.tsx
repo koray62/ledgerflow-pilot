@@ -79,17 +79,19 @@ const DashboardSettings = () => {
         .upload(path, file, { upsert: true });
       if (uploadErr) throw uploadErr;
 
-      const { data: urlData } = supabase.storage
-        .from("tenant-documents")
-        .getPublicUrl(path);
-
-      const publicUrl = urlData.publicUrl;
-      setLogoUrl(publicUrl);
+      // Store the storage path, not a URL
+      const storagePath = path;
 
       await supabase
         .from("tenants")
-        .update({ logo_url: publicUrl } as any)
+        .update({ logo_url: storagePath } as any)
         .eq("id", tenantId);
+
+      // Generate a signed URL for display
+      const { data: signedData } = await supabase.storage
+        .from("tenant-documents")
+        .createSignedUrl(storagePath, 3600);
+      if (signedData?.signedUrl) setLogoUrl(signedData.signedUrl);
 
       toast({ title: "Logo uploaded" });
       queryClient.invalidateQueries({ queryKey: ["tenant-settings", tenantId] });
