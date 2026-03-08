@@ -1,51 +1,25 @@
 
 
-## Performance Analysis Dashboard
+## Problem
 
-### Overview
-New `/dashboard/performance` page with 4-year financial KPIs (2023-2026), interactive charts, data tables, and key financial analysis metrics including Quick Ratio.
+In the "Review & Approve Journal Entries" table, the Amount column shows plain numbers (e.g., `50000`, `4.22`, `308.3`) without any sign indicator. Since journal entries always use absolute amounts (debit/credit accounts indicate direction), users can't tell at a glance whether the original transaction was an inflow or outflow.
 
-### Page Layout
+## Solution
 
-**Tab 1 - Overview:**
-- **4 KPI summary cards** (current year): Revenue, Net Income, Net Profit Margin %, Quick Ratio -- each with YoY change badge
-- **Revenue vs Expenses** grouped BarChart (4 years)
-- **Net Income trend** LineChart (4 years)
-- **Margins & Ratios trend** LineChart (Net Profit Margin %, Expense Ratio)
+Enhance the Amount column in the suggestions review table to clearly indicate the direction of the original transaction:
 
-**Tab 2 - Detailed Table:**
-- Year-by-year table with rows: Revenue, Expenses, Net Income, Gross Margin %, Net Profit Margin %, Expense Ratio, Revenue Growth %, Expense Growth %, Operating Leverage, Quick Ratio, Monthly Avg Revenue, Monthly Avg Expenses (Burn Rate)
-- YoY change columns for each year (except oldest)
-- CAGR row in footer
+1. **Color coding**: Green for inflows (credits/positive original amounts), red for outflows (debits/negative original amounts)
+2. **Prefix indicators**: Show `▲` or `+` for inflows and `▼` or `−` for outflows next to the amount
+3. **Apply to both states**: The pending (editable input) and approved (read-only span) views should both show the direction indicator
 
-**Tab 3 - Financial Ratios:**
-- Cards for each metric with 4-year sparkline trends:
-  - **Quick Ratio** = (Cash + AR) / (AP + short-term liabilities) -- uses bank_accounts.current_balance + unpaid invoices vs unpaid bills
-  - **Net Profit Margin** = Net Income / Revenue
-  - **Expense Ratio** = Expenses / Revenue
-  - **Operating Leverage** = Revenue Growth % / Expense Growth %
-  - **AR Turnover** = Revenue / Average AR
-  - **AP Turnover** = Expenses / Average AP
+### Technical approach
 
-### Data Fetching
-- Reuse `fetchLineTotals` + `computeBalances` pattern from IncomeStatement (4 parallel useQuery calls, one per year)
-- Query `chart_of_accounts` for all account types (need asset/liability for Quick Ratio)
-- Query `bank_accounts` for cash balance
-- Query `invoices` (sent/overdue) and `bills` (received/overdue) per year for AR/AP data
-- Quick Ratio computation: cash from bank_accounts + outstanding AR from invoices, divided by outstanding AP from bills
+- Each suggestion object already has `originalTx.amount` which preserves the sign from the CSV. Use this to determine direction.
+- For the **read-only** display: format with color + arrow prefix based on `originalTx.amount` sign
+- For the **editable input**: add a colored badge/label next to the input showing the direction (e.g., a small "IN" or "OUT" badge), since the input itself shows the absolute journal amount
+- Apply similar treatment to the raw transaction preview table (line ~547) which already has color but could benefit from clearer `+`/`-` prefixes
 
-### Files to Change
+### Files to change
 
-1. **New**: `src/pages/dashboard/PerformanceAnalysis.tsx`
-   - Uses: Card, Table, Badge, Skeleton, Tabs, recharts (BarChart, LineChart, ResponsiveContainer, Tooltip, Legend)
-   - 4 yearly useQuery for journal line totals
-   - useQuery for accounts, bank_accounts, invoices, bills
-   - Computes all KPIs per year, renders charts + tables
-
-2. **Edit**: `src/components/dashboard/DashboardLayout.tsx` (line 20)
-   - Add `{ title: "Performance", icon: Activity, path: "/dashboard/performance" }` after Cash Flow
-   - Import `Activity` from lucide-react
-
-3. **Edit**: `src/App.tsx`
-   - Import `PerformanceAnalysis`, add `<Route path="performance" element={<PerformanceAnalysis />} />`
+- `src/pages/dashboard/BankAccounts.tsx` — Update the Amount cells in both the transaction preview table and the journal entry review table to include direction indicators and consistent color coding
 
