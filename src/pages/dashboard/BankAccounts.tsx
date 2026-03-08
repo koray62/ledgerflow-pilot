@@ -856,19 +856,20 @@ export default function BankAccounts() {
                     </div>
                     <Table>
                       <TableHeader><TableRow>
-                        <TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead>
+                        <TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Detailed Description</TableHead><TableHead className="text-right">Amount</TableHead>
                       </TableRow></TableHeader>
                       <TableBody>
                         {parsedTxs.slice(0, 20).map((t, i) => (
                           <TableRow key={i}>
                             <TableCell>{t.date}</TableCell>
                             <TableCell>{t.description}</TableCell>
+                            <TableCell className="text-muted-foreground text-xs max-w-[300px] truncate">{t.detailedDescription || "—"}</TableCell>
                             <TableCell className={`text-right font-mono ${t.amount >= 0 ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>
                               {t.amount >= 0 ? `+${fmt(t.amount)}` : `−${fmt(Math.abs(t.amount))}`}
                             </TableCell>
                           </TableRow>
                         ))}
-                        {parsedTxs.length > 20 && <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">…and {parsedTxs.length - 20} more</TableCell></TableRow>}
+                        {parsedTxs.length > 20 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">…and {parsedTxs.length - 20} more</TableCell></TableRow>}
                       </TableBody>
                     </Table>
                   </div>
