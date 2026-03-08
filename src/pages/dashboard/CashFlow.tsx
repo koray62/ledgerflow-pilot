@@ -171,7 +171,7 @@ const CashFlow = () => {
       });
     }
 
-    let running = cashBalance;
+    let running = netCashPosition;
     return months.map((m) => {
       let inflow = 0;
       let outflow = 0;
@@ -213,7 +213,8 @@ const CashFlow = () => {
   const metrics = [
     { label: "Burn Rate (Period)", value: formatCurrency(monthlyBurn), icon: TrendingUp },
     { label: "Runway", value: runway !== null ? `${runway.toFixed(1)} months` : "N/A", icon: Clock },
-    { label: "Net Cash Position", value: formatCurrency(cashBalance), icon: DollarSign },
+    { label: "Net Cash Position", value: formatCurrency(netCashPosition), icon: DollarSign },
+    { label: "Accounts Payable", value: formatCurrency(apBalance), icon: AlertTriangle },
   ];
 
   return (
