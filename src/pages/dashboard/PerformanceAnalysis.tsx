@@ -18,8 +18,7 @@ import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { TrendingUp, TrendingDown, DollarSign, Percent, Shield, Activity, Download, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import type { Database } from "@/integrations/supabase/types";
 import type { Database } from "@/integrations/supabase/types";
 
 type AccountType = Database["public"]["Enums"]["account_type"];
