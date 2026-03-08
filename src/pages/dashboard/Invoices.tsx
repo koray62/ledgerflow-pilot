@@ -911,6 +911,38 @@ const Invoices = () => {
                 )}
               </div>
 
+              {/* Linked Journal Entries */}
+              {(previewInvoice.journal_entry_id || previewInvoice.payment_journal_entry_id) && (
+                <div className="mt-6 pt-4 border-t border-border">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Linked Journal Entries</p>
+                  <div className="space-y-2">
+                    {previewInvoice.journal_entry_id && (
+                      <button
+                        className="flex items-center gap-2 text-sm text-primary hover:underline cursor-pointer"
+                        onClick={() => {
+                          setPreviewOpen(false);
+                          navigate(`/dashboard/journal?edit=${previewInvoice.journal_entry_id}&from=invoices`);
+                        }}
+                      >
+                        <BookOpen className="h-3.5 w-3.5" />
+                        Accrual Entry (AR / Revenue / VAT)
+                      </button>
+                    )}
+                    {previewInvoice.payment_journal_entry_id && (
+                      <button
+                        className="flex items-center gap-2 text-sm text-primary hover:underline cursor-pointer"
+                        onClick={() => {
+                          setPreviewOpen(false);
+                          navigate(`/dashboard/journal?edit=${previewInvoice.payment_journal_entry_id}&from=invoices`);
+                        }}
+                      >
+                        <BookOpen className="h-3.5 w-3.5" />
+                        Payment Entry (Bank / AR)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
               <DialogFooter>
                 <Button variant="outline" onClick={() => window.print()}>
                   <Printer className="h-4 w-4 mr-1" /> Print
