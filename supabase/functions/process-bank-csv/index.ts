@@ -49,7 +49,12 @@ serve(async (req) => {
     const systemPrompt = `You are an expert accountant. You will receive a list of bank transactions and a chart of accounts.
 
 For each transaction, determine the most appropriate accounts using double-entry accounting rules:
-- Money going OUT (negative amounts, withdrawals, debits): Credit the bank/cash asset account, Debit the appropriate expense/asset account. Return a single entry with debitAccountId and creditAccountId.
+- Money going OUT (negative amounts, withdrawals, debits) to an EXPENSE account: Apply 20% VAT automatically. Split into multiple journal lines:
+  * Credit: Bank/Cash asset account for the FULL amount (gross)
+  * Debit: Expense account for the NET amount (gross / 1.20)
+  * Debit: VAT Receivable (Input VAT) account for the VAT amount (gross - net)
+  For these, use the "lines" array format instead of debitAccountId/creditAccountId.
+- Money going OUT (negative amounts) to a NON-expense account (e.g., loan repayment, owner drawings, asset purchase): Credit the bank/cash asset account, Debit the appropriate account. Return a single entry with debitAccountId and creditAccountId.
 - Money coming IN (positive amounts, deposits, credits) that is SALES REVENUE: Apply 20% VAT automatically. Split into multiple journal lines:
   * Debit: Bank/Cash asset account for the FULL amount (gross)
   * Credit: Sales Revenue account for the NET amount (gross / 1.20)
