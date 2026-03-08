@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { format, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -8,12 +10,18 @@ import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DateRangeFilter } from "@/components/dashboard/DateRangeFilter";
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(val);
 
 const CashFlow = () => {
   const { tenantId } = useTenant();
+  const [startDate, setStartDate] = useState<Date | undefined>(subDays(new Date(), 30));
+  const [endDate, setEndDate] = useState<Date | undefined>(new Date());
+
+  const startStr = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
+  const endStr = endDate ? format(endDate, "yyyy-MM-dd") : undefined;
 
   // Cash balance from bank accounts
   const { data: cashBalance = 0 } = useQuery({
@@ -28,17 +36,18 @@ const CashFlow = () => {
     },
   });
 
-  // Monthly outflows from bills
+  // Monthly outflows from bills in selected range
   const { data: monthlyBurn = 0 } = useQuery({
-    queryKey: ["cf-burn", tenantId],
+    queryKey: ["cf-burn", tenantId, startStr, endStr],
     enabled: !!tenantId,
     queryFn: async () => {
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
-      const { data } = await supabase
+      let query = supabase
         .from("bills")
         .select("total_amount")
-        .eq("tenant_id", tenantId!)
-        .gte("bill_date", thirtyDaysAgo);
+        .eq("tenant_id", tenantId!);
+      if (startStr) query = query.gte("bill_date", startStr);
+      if (endStr) query = query.lte("bill_date", endStr);
+      const { data } = await query;
       return data?.reduce((s, b) => s + Number(b.total_amount), 0) ?? 0;
     },
   });
@@ -111,7 +120,6 @@ const CashFlow = () => {
       let inflow = 0;
       let outflow = 0;
 
-      // AR inflows from outstanding invoices due this month
       outstandingInvoices.forEach((inv) => {
         const due = new Date(inv.due_date);
         if (due >= m.start && due <= m.end) {
@@ -119,7 +127,6 @@ const CashFlow = () => {
         }
       });
 
-      // AP outflows from outstanding bills due this month
       outstandingBills.forEach((bill) => {
         const due = new Date(bill.due_date);
         if (due >= m.start && due <= m.end) {
@@ -127,17 +134,14 @@ const CashFlow = () => {
         }
       });
 
-      // Forecast entries (manual + recurring)
       forecasts.forEach((f) => {
         const fd = new Date(f.forecast_date);
         if (f.is_recurring && f.recurrence_interval === "monthly") {
-          // Recurring monthly: applies every month at or after forecast_date
           if (fd <= m.end) {
             const amt = Number(f.amount);
             if (amt >= 0) inflow += amt; else outflow += Math.abs(amt);
           }
         } else {
-          // One-time: only in its month
           if (fd >= m.start && fd <= m.end) {
             const amt = Number(f.amount);
             if (amt >= 0) inflow += amt; else outflow += Math.abs(amt);
@@ -151,16 +155,24 @@ const CashFlow = () => {
   })();
 
   const metrics = [
-    { label: "Monthly Burn Rate", value: formatCurrency(monthlyBurn), icon: TrendingUp },
+    { label: "Burn Rate (Period)", value: formatCurrency(monthlyBurn), icon: TrendingUp },
     { label: "Runway", value: runway !== null ? `${runway.toFixed(1)} months` : "N/A", icon: Clock },
     { label: "Net Cash Position", value: formatCurrency(cashBalance), icon: DollarSign },
   ];
 
   return (
     <div className="p-6 lg:p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Cash Flow</h1>
-        <p className="text-sm text-muted-foreground">Historical and projected cash flow analysis</p>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Cash Flow</h1>
+          <p className="text-sm text-muted-foreground">Historical and projected cash flow analysis</p>
+        </div>
+        <DateRangeFilter
+          startDate={startDate}
+          endDate={endDate}
+          onStartDateChange={setStartDate}
+          onEndDateChange={setEndDate}
+        />
       </div>
 
       {showWarning && (
@@ -169,13 +181,12 @@ const CashFlow = () => {
           <div>
             <p className="text-sm font-medium text-foreground">Low runway warning</p>
             <p className="text-xs text-muted-foreground">
-              At current burn rate, your cash runway is approximately {runway?.toFixed(1)} months. Consider reducing expenses or increasing revenue.
+              At current burn rate, your cash runway is approximately {runway?.toFixed(1)} months.
             </p>
           </div>
         </div>
       )}
 
-      {/* Metrics */}
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         {metrics.map((m, i) => (
           <Card key={i}>
@@ -192,7 +203,6 @@ const CashFlow = () => {
         ))}
       </div>
 
-      {/* Forecast Chart */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">12-Month Cash Flow Forecast</CardTitle>
@@ -224,7 +234,6 @@ const CashFlow = () => {
         </CardContent>
       </Card>
 
-      {/* Forecast Breakdown Table */}
       <Card className="mt-6">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Monthly Breakdown</CardTitle>

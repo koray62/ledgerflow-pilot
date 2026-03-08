@@ -1,10 +1,12 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
+import { format, startOfYear } from "date-fns";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { DateRangeFilter } from "@/components/dashboard/DateRangeFilter";
 import type { Database } from "@/integrations/supabase/types";
 
 type AccountType = Database["public"]["Enums"]["account_type"];
@@ -22,6 +24,11 @@ const fmt = (n: number) =>
 
 const IncomeStatement = () => {
   const { tenantId } = useTenant();
+  const [startDate, setStartDate] = useState<Date | undefined>(startOfYear(new Date()));
+  const [endDate, setEndDate] = useState<Date | undefined>(new Date());
+
+  const startStr = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
+  const endStr = endDate ? format(endDate, "yyyy-MM-dd") : undefined;
 
   const { data: accounts = [], isLoading: loadingAccounts } = useQuery({
     queryKey: ["is-accounts", tenantId],
@@ -39,15 +46,20 @@ const IncomeStatement = () => {
   });
 
   const { data: lineTotals = [], isLoading: loadingLines } = useQuery({
-    queryKey: ["is-line-totals", tenantId],
+    queryKey: ["is-line-totals", tenantId, startStr, endStr],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data: entries } = await supabase
+      let query = supabase
         .from("journal_entries")
         .select("id")
         .eq("tenant_id", tenantId!)
         .eq("status", "posted")
         .is("deleted_at", null);
+
+      if (startStr) query = query.gte("entry_date", startStr);
+      if (endStr) query = query.lte("entry_date", endStr);
+
+      const { data: entries } = await query;
 
       if (!entries || entries.length === 0) return [];
 
@@ -68,7 +80,6 @@ const IncomeStatement = () => {
     const map: Record<string, number> = {};
     for (const acc of accounts) {
       const lines = lineTotals.filter((l) => l.account_id === acc.id);
-      // Revenue: credit-normal (credit - debit), Expense: debit-normal (debit - credit)
       const isDebitNormal = acc.account_type === "expense";
       const balance = lines.reduce((s, l) => {
         const d = Number(l.debit);
@@ -134,11 +145,12 @@ const IncomeStatement = () => {
   const totalExpenses = sectionTotals["expense"] ?? 0;
   const netIncome = totalRevenue - totalExpenses;
 
-  const today = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const subtitle = [
+    startDate && format(startDate, "MMM d, yyyy"),
+    endDate && format(endDate, "MMM d, yyyy"),
+  ]
+    .filter(Boolean)
+    .join(" – ") || "All time";
 
   if (isLoading) {
     return (
@@ -157,17 +169,25 @@ const IncomeStatement = () => {
 
   return (
     <div className="p-6 lg:p-8">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Income Statement</h1>
-          <p className="text-sm text-muted-foreground">As of {today} · Posted entries only</p>
+          <p className="text-sm text-muted-foreground">{subtitle} · Posted entries only</p>
         </div>
-        <Badge
-          variant="default"
-          className={netIncome >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}
-        >
-          {netIncome >= 0 ? "Net Profit" : "Net Loss"}
-        </Badge>
+        <div className="flex items-center gap-3">
+          <DateRangeFilter
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+          />
+          <Badge
+            variant="default"
+            className={netIncome >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}
+          >
+            {netIncome >= 0 ? "Net Profit" : "Net Loss"}
+          </Badge>
+        </div>
       </div>
 
       <div className="max-w-3xl space-y-6">
@@ -221,7 +241,6 @@ const IncomeStatement = () => {
           );
         })}
 
-        {/* Net Income Summary */}
         <Card className="border-accent/30">
           <CardContent className="p-4 space-y-2">
             <div className="flex justify-between text-sm">
