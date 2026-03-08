@@ -20,7 +20,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Trash2, Eye, CreditCard, Printer, BookOpen } from "lucide-react";
+import { Plus, Search, Trash2, Eye, CreditCard, Printer, BookOpen, XCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import html2canvas from "html2canvas";
