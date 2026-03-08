@@ -168,7 +168,7 @@ const DashboardOverview = () => {
                 <div key={i} className="flex items-center justify-between rounded-lg border border-border p-3">
                   <div className="flex items-center gap-4">
                     <span className="text-xs text-muted-foreground font-mono w-14">
-                      {new Date(entry.entry_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      {formatDisplayDate(entry.entry_date, defaultCurrency, "month")}
                     </span>
                     <div>
                       <p className="text-sm font-medium text-card-foreground">{entry.description}</p>

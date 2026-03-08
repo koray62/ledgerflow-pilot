@@ -445,7 +445,7 @@ const OCRUpload = ({ onEditEntry }: OCRUploadProps) => {
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-foreground">{doc.filename}</p>
                           <p className="text-xs text-muted-foreground">
-                            {doc.suggested_vendor || "—"} · {new Date(doc.created_at).toLocaleDateString()} · {fmtSize(doc.file_size)}
+                            {doc.suggested_vendor || "—"} · {formatDisplayDate(doc.created_at, defaultCurrency)} · {fmtSize(doc.file_size)}
                           </p>
                         </div>
                       </div>

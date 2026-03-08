@@ -614,7 +614,7 @@ export default function BankAccounts() {
                           <Button variant="outline" size="sm" className={cn("h-7 w-full justify-start text-xs font-normal gap-1", !txFilters.dateFrom && !txFilters.dateTo && "text-muted-foreground")}>
                             <CalendarIcon className="h-3 w-3 shrink-0" />
                             {txFilters.dateFrom || txFilters.dateTo
-                              ? `${txFilters.dateFrom ? format(txFilters.dateFrom, "MM/dd") : "…"} – ${txFilters.dateTo ? format(txFilters.dateTo, "MM/dd") : "…"}`
+                              ? `${txFilters.dateFrom ? formatDisplayDate(txFilters.dateFrom, defaultCurrency, "short") : "…"} – ${txFilters.dateTo ? formatDisplayDate(txFilters.dateTo, defaultCurrency, "short") : "…"}`
                               : "Date…"}
                           </Button>
                         </PopoverTrigger>

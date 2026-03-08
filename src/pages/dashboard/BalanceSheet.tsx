@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
+import { formatDisplayDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -153,7 +154,7 @@ const BalanceSheet = () => {
   const isBalanced = Math.abs(totalAssets - totalLiabilitiesAndEquity) < 0.01;
 
   const displayDate = asOfDate
-    ? asOfDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    ? formatDisplayDate(asOfDate, defaultCurrency)
     : "Today";
 
   if (isLoading) {

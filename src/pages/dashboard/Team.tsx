@@ -264,7 +264,7 @@ export default function Team() {
                         {m.role}
                       </Badge>
                     </TableCell>
-                    <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell>{formatDisplayDate(m.created_at, defaultCurrency)}</TableCell>
                     {canManageTeam && (
                       <TableCell>
                         {!isSelf && (

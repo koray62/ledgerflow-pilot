@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { format, subDays } from "date-fns";
+import { formatDisplayDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -315,7 +316,7 @@ const CashFlow = () => {
                       const outstanding = Number(inv.total_amount) - Number(inv.amount_paid);
                       return (
                         <tr key={i} className="border-b border-border/30 hover:bg-muted/50">
-                          <td className="py-2 text-foreground">{format(new Date(inv.due_date), "MMM d, yyyy")}</td>
+                          <td className="py-2 text-foreground">{formatDisplayDate(inv.due_date, defaultCurrency)}</td>
                           <td className="py-2">
                             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                               inv.status === "overdue"
@@ -363,7 +364,7 @@ const CashFlow = () => {
                       const outstanding = Number(bill.total_amount) - Number(bill.amount_paid);
                       return (
                         <tr key={i} className="border-b border-border/30 hover:bg-muted/50">
-                          <td className="py-2 text-foreground">{format(new Date(bill.due_date), "MMM d, yyyy")}</td>
+                          <td className="py-2 text-foreground">{formatDisplayDate(bill.due_date, defaultCurrency)}</td>
                           <td className="py-2">
                             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                               bill.status === "overdue"
@@ -411,7 +412,7 @@ const CashFlow = () => {
                       const amt = Number(f.amount);
                       return (
                         <tr key={i} className="border-b border-border/30 hover:bg-muted/50">
-                          <td className="py-2 text-foreground">{format(new Date(f.forecast_date), "MMM d, yyyy")}</td>
+                          <td className="py-2 text-foreground">{formatDisplayDate(f.forecast_date, defaultCurrency)}</td>
                           <td className="py-2 text-foreground">{f.description}</td>
                           <td className="py-2 text-muted-foreground">{f.category ?? "—"}</td>
                           <td className="py-2">
