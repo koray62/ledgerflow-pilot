@@ -53,7 +53,23 @@ const DashboardSettings = () => {
       setFiscalYearEnd(String(tenant.fiscal_year_end ?? 12));
       setAddress(tenant.address ?? "");
       setTaxId(tenant.tax_id ?? "");
-      setLogoUrl(tenant.logo_url ?? null);
+      // Generate signed URL from stored path
+      const storedLogo = tenant.logo_url as string | null;
+      if (storedLogo) {
+        // If it's already a full URL (legacy), try to extract path; otherwise use as path
+        const path = storedLogo.includes("/storage/v1/")
+          ? storedLogo.split("/tenant-documents/").pop() ?? storedLogo
+          : storedLogo;
+        supabase.storage
+          .from("tenant-documents")
+          .createSignedUrl(path, 3600)
+          .then(({ data }) => {
+            if (data?.signedUrl) setLogoUrl(data.signedUrl);
+            else setLogoUrl(null);
+          });
+      } else {
+        setLogoUrl(null);
+      }
     }
   }, [tenant]);
 
@@ -79,17 +95,19 @@ const DashboardSettings = () => {
         .upload(path, file, { upsert: true });
       if (uploadErr) throw uploadErr;
 
-      const { data: urlData } = supabase.storage
-        .from("tenant-documents")
-        .getPublicUrl(path);
-
-      const publicUrl = urlData.publicUrl;
-      setLogoUrl(publicUrl);
+      // Store the storage path, not a URL
+      const storagePath = path;
 
       await supabase
         .from("tenants")
-        .update({ logo_url: publicUrl } as any)
+        .update({ logo_url: storagePath } as any)
         .eq("id", tenantId);
+
+      // Generate a signed URL for display
+      const { data: signedData } = await supabase.storage
+        .from("tenant-documents")
+        .createSignedUrl(storagePath, 3600);
+      if (signedData?.signedUrl) setLogoUrl(signedData.signedUrl);
 
       toast({ title: "Logo uploaded" });
       queryClient.invalidateQueries({ queryKey: ["tenant-settings", tenantId] });
