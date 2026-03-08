@@ -5,7 +5,8 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer
 } from "recharts";
-import { AlertTriangle, TrendingUp, DollarSign, Clock } from "lucide-react";
+import { AlertTriangle, TrendingUp, DollarSign, Clock, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -167,12 +168,26 @@ const CashFlow = () => {
           <h1 className="text-2xl font-bold text-foreground">Cash Flow</h1>
           <p className="text-sm text-muted-foreground">Historical and projected cash flow analysis</p>
         </div>
-        <DateRangeFilter
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-        />
+        <div className="flex items-center gap-3">
+          <DateRangeFilter
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs text-muted-foreground"
+            onClick={() => {
+              setStartDate(subDays(new Date(), 30));
+              setEndDate(new Date());
+            }}
+          >
+            <RotateCcw className="h-3.5 w-3.5 mr-1" />
+            Reset
+          </Button>
+        </div>
       </div>
 
       {showWarning && (

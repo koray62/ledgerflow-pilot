@@ -1,9 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { format, startOfYear, subYears } from "date-fns";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { RotateCcw } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
@@ -255,6 +257,19 @@ const IncomeStatement = () => {
             onStartDateChange={setStartDate}
             onEndDateChange={setEndDate}
           />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs text-muted-foreground"
+            onClick={() => {
+              setStartDate(startOfYear(new Date()));
+              setEndDate(new Date());
+              setCompareEnabled(false);
+            }}
+          >
+            <RotateCcw className="h-3.5 w-3.5 mr-1" />
+            Reset
+          </Button>
           <div className="flex items-center gap-1.5">
             <Switch
               id="compare-toggle"
