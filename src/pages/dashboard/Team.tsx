@@ -24,7 +24,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, UserPlus, Shield, Trash2 } from "lucide-react";
+import { Search, Plus, MoreHorizontal, UserPlus, Shield, Trash2, Check } from "lucide-react";
 import AccessRightsTable from "@/components/dashboard/AccessRightsTable";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Constants } from "@/integrations/supabase/types";
@@ -254,7 +254,10 @@ export default function Team() {
                 const isSelf = m.user_id === user?.id;
                 return (
                   <TableRow key={m.user_id}>
-                    <TableCell className="font-medium">{memberName(m)}</TableCell>
+                    <TableCell className="font-medium flex items-center gap-2">
+                      {memberName(m)}
+                      {isSelf && <Check className="h-4 w-4 text-primary" />}
+                    </TableCell>
                     <TableCell>{m.profile?.email || "—"}</TableCell>
                     <TableCell>
                       <Badge variant={roleBadgeVariant(m.role)} className="capitalize">
