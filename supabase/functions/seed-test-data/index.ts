@@ -92,16 +92,18 @@ Deno.serve(async (req) => {
     const allLines: any[] = [];
     const allBankTx: any[] = [];
 
-    const years = [2022, 2023, 2024, 2025];
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+    const years = [2022, 2023, 2024, 2025, 2026];
 
     for (const year of years) {
       for (let month = 1; month <= 12; month++) {
         // Skip future months
-        if (year === 2026 || (year === 2025 && month > 12)) continue;
+        if (year > currentYear || (year === currentYear && month > currentMonth)) continue;
 
         const dateStr = `${year}-${String(month).padStart(2, "0")}`;
         const entryDate = `${dateStr}-15`;
-        const status = year < 2025 ? "posted" : (month <= 9 ? "posted" : "draft");
+        const status = (year < currentYear || (year === currentYear && month <= currentMonth - 2)) ? "posted" : "draft";
         const postedAt = status === "posted" ? `${dateStr}-16T00:00:00Z` : null;
 
         // 1) Revenue - Product Sales
