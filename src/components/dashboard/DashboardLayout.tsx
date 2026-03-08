@@ -91,6 +91,63 @@ const DashboardLayout = () => {
                 </Link>
               );
             })}
+
+            {/* Financial Statements accordion */}
+            <Collapsible defaultOpen={financialStatements.some(i => location.pathname === i.path)}>
+              <CollapsibleTrigger className={cn(
+                "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                financialStatements.some(i => location.pathname === i.path) && "text-sidebar-primary font-medium"
+              )}>
+                <FileText className="h-4 w-4 shrink-0" />
+                {!collapsed && (
+                  <>
+                    <span className="flex-1 text-left">Financial Statements</span>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                  </>
+                )}
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="ml-4 space-y-1 border-l border-sidebar-border pl-2 mt-1">
+                  {financialStatements.map((item) => {
+                    const isActive = location.pathname === item.path;
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors",
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-primary font-medium"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        )}
+                      >
+                        <item.icon className="h-3.5 w-3.5 shrink-0" />
+                        {!collapsed && <span>{item.title}</span>}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {navItemsBottom.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-primary font-medium"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  {!collapsed && <span>{item.title}</span>}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* Upgrade banner */}
