@@ -423,7 +423,7 @@ const PerformanceAnalysis = () => {
     },
   ];
 
-  const monthlyTotalsComputed = monthlyTotals;
+  
 
   // PDF Export
   const handleExportPDF = async () => {
