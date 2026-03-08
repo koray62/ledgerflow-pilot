@@ -174,7 +174,7 @@ export default function BankAccounts() {
   // Import state
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<string[][]>([]);
-  const [colMap, setColMap] = useState<{ dateIdx: number; descIdx: number; amtIdx: number; debitIdx: number; creditIdx: number }>({ dateIdx: -1, descIdx: -1, amtIdx: -1, debitIdx: -1, creditIdx: -1 });
+  const [colMap, setColMap] = useState<{ dateIdx: number; descIdx: number; detailDescIdx: number; amtIdx: number; debitIdx: number; creditIdx: number }>({ dateIdx: -1, descIdx: -1, detailDescIdx: -1, amtIdx: -1, debitIdx: -1, creditIdx: -1 });
   const [dateFormat, setDateFormat] = useState("yyyy-mm-dd");
   const [parsedTxs, setParsedTxs] = useState<ParsedTx[]>([]);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
