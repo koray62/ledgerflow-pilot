@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
-import { formatCurrency as fmtCurrency } from "@/lib/utils";
+import { formatCurrency as fmtCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +81,7 @@ const Invoices = () => {
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<InvoiceLine[]>([emptyLine()]);
+  const [invoiceCurrency, setInvoiceCurrency] = useState(defaultCurrency);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -307,9 +308,10 @@ const Invoices = () => {
         subtotal,
         tax_amount: taxAmount,
         total_amount: totalAmount,
+        currency: invoiceCurrency,
         status: "sent" as const,
         created_by: user.id,
-      };
+      } as any;
 
       let invoiceId = editId;
       if (editId) {
