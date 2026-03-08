@@ -74,6 +74,13 @@ const CashFlow = () => {
     return [dr.id, ...coaAccounts.filter(a => a.parent_id === dr.id).map(a => a.id)];
   }, [coaAccounts]);
 
+  // Sales Tax Payable account IDs (2500 and descendants)
+  const taxPayableAccountIds = useMemo(() => {
+    const tax = coaAccounts.find(a => a.code === "2500" && a.account_type === "liability");
+    if (!tax) return [];
+    return [tax.id, ...coaAccounts.filter(a => a.parent_id === tax.id).map(a => a.id)];
+  }, [coaAccounts]);
+
   // Revenue & Expense account IDs for computing Net Income (accrual mode)
   const revenueAccountIds = useMemo(
     () => coaAccounts.filter(a => a.account_type === "revenue").map(a => a.id),
@@ -204,6 +211,14 @@ const CashFlow = () => {
       .reduce((s, l) => s + Number(l.credit) - Number(l.debit), 0);
   }, [isCashBasis, allPeriodLines, deferredRevAccountIds]);
 
+  const accrualTaxPayableChange = useMemo(() => {
+    if (isCashBasis) return 0;
+    const taxSet = new Set(taxPayableAccountIds);
+    // Change in Sales Tax Payable = net credit increase (credit-normal)
+    return allPeriodLines.filter(l => taxSet.has(l.account_id))
+      .reduce((s, l) => s + Number(l.credit) - Number(l.debit), 0);
+  }, [isCashBasis, allPeriodLines, taxPayableAccountIds]);
+
   // Monthly outflows from bills
   const { data: monthlyBurn = 0 } = useQuery({
     queryKey: ["cf-burn", tenantId, startStr, endStr],
@@ -297,8 +312,8 @@ const CashFlow = () => {
   const runway = monthlyBurn > 0 ? netCashPosition / monthlyBurn : null;
   const showWarning = runway !== null && runway < 6;
 
-  // For accrual mode: Net Cash from Operations = Net Income - ΔAR + ΔDeferred Revenue
-  const accrualNetCashFromOps = accrualNetIncome - accrualARChange + accrualDeferredRevChange;
+  // For accrual mode: Net Cash from Operations = Net Income - ΔAR + ΔDeferred Revenue + ΔSales Tax Payable
+  const accrualNetCashFromOps = accrualNetIncome - accrualARChange + accrualDeferredRevChange + accrualTaxPayableChange;
 
   // Build monthly chart
   const chartData = (() => {
@@ -498,6 +513,14 @@ const CashFlow = () => {
                   </td>
                   <td className={`py-2.5 text-right font-mono ${accrualDeferredRevChange >= 0 ? "text-success" : "text-destructive"}`}>
                     {formatCurrency(accrualDeferredRevChange)}
+                  </td>
+                </tr>
+                <tr className="border-b border-border/30">
+                  <td className="py-2.5 text-muted-foreground pl-4">
+                    Add: Increase in Sales Tax Payable
+                  </td>
+                  <td className={`py-2.5 text-right font-mono ${accrualTaxPayableChange >= 0 ? "text-success" : "text-destructive"}`}>
+                    {formatCurrency(accrualTaxPayableChange)}
                   </td>
                 </tr>
                 <tr className="border-t-2 border-border">
