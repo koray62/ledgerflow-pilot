@@ -22,7 +22,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Trash2, Eye, CreditCard, Printer, BookOpen, XCircle } from "lucide-react";
+import { Plus, Search, Trash2, Eye, CreditCard, Printer, FileText, Banknote, XCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import html2canvas from "html2canvas";
@@ -705,21 +705,25 @@ const Invoices = () => {
                       {inv.journal_entry_id && (
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="sm"
+                          className="gap-1 text-xs"
                           onClick={() => navigate(`/dashboard/journal?edit=${inv.journal_entry_id}&from=invoices`)}
                           title="View Accrual Journal Entry"
                         >
-                          <BookOpen className="h-4 w-4" />
+                          <FileText className="h-4 w-4 text-blue-600" />
+                          Accrual
                         </Button>
                       )}
                       {inv.payment_journal_entry_id && (
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="sm"
+                          className="gap-1 text-xs"
                           onClick={() => navigate(`/dashboard/journal?edit=${inv.payment_journal_entry_id}&from=invoices`)}
                           title="View Payment Journal Entry"
                         >
-                          <BookOpen className="h-4 w-4 text-emerald-600" />
+                          <Banknote className="h-4 w-4 text-emerald-600" />
+                          Payment
                         </Button>
                       )}
                     </TableCell>

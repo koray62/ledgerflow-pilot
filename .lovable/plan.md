@@ -1,23 +1,45 @@
 
+## Multi-Currency Support — IMPLEMENTED
 
-## Problem
+### Supported Currencies
+USD, EUR, AED (UAE Dirham), TRY (Turkish Lira), SAR (Saudi Riyal)
 
-The two journal entry action buttons on the invoice list look nearly identical (both use `BookOpen` icon, differentiated only by a subtle green tint and hover tooltip). This makes it easy to confuse which button opens which entry. Additionally, for invoice LP2026000103, the `journal_entry_id` and `payment_journal_entry_id` values may have been stored in the wrong columns due to the earlier bug.
+### Database Changes ✅
+- `tenants.default_currency` (text, NOT NULL, default 'USD')
+- `journal_entries.currency` (text, NOT NULL, default 'USD')
+- `invoices.currency` (text, NOT NULL, default 'USD')
+- `bank_accounts.currency` already existed
 
-## Fix
+### Shared Utility (`src/lib/utils.ts`) ✅
+- `SUPPORTED_CURRENCIES` constant with code, label, symbol
+- `formatCurrency(amount, currency, options?)` using `Intl.NumberFormat`
+- `CurrencyCode` type
 
-1. **Differentiate the buttons visually** in `src/pages/dashboard/Invoices.tsx` (lines 705-723):
-   - Use a `FileText` icon (or similar) for the **Accrual Journal Entry** button with a label/tooltip "Accrual Entry"
-   - Use a `Banknote` or `CreditCard` icon for the **Payment Journal Entry** button with a label/tooltip "Payment Entry"
-   - Add visible text labels next to the icons (e.g., small text like "Accrual" / "Payment") so users don't need to hover
+### Tenant Context (`useTenant.tsx`) ✅
+- `defaultCurrency` exposed from tenant record
 
-2. **No data migration needed** — the user can manually fix LP2026000103 by editing the entry, or we can note that entries created before the fix may have swapped IDs.
+### Settings (`DashboardSettings.tsx`) ✅
+- Default Currency dropdown in Organization section
 
-### Code Change (lines ~705-723 in Invoices.tsx)
+### Form Currency Selectors ✅
+- **JournalEntryForm**: Currency dropdown, defaults to tenant currency, saves to `journal_entries.currency`
+- **Invoices**: Currency dropdown in create/edit dialog, saves to `invoices.currency`
+- **BankAccounts**: Select dropdown with all 5 currencies (replaced text input)
 
-Replace the two `BookOpen` buttons with distinct icons:
-- Accrual button: `FileText` icon (blue tint) + title "View Accrual Journal Entry"  
-- Payment button: `Banknote` icon (green tint) + title "View Payment Journal Entry"
+### Financial Statements ✅
+All reports use `formatCurrency(amount, defaultCurrency)`:
+- Balance Sheet, Income Statement, Cash Flow, Performance Analysis, Dashboard Overview
+- Chart of Accounts, Journal Entries, OCR Upload
+- Bank account balances display in account's own currency
 
-Import `FileText` and `Banknote` from `lucide-react`.
+### Design Decision: Single-Currency Reporting
+- Financial statements report in tenant's default currency only
+- `currency` field on journal_entries/invoices is metadata for the transaction currency
+- Journal line debits/credits are always in the functional (reporting) currency
 
+### Future Enhancements (out of scope)
+- Multi-currency FX rate table
+- Unrealized gain/loss calculations
+- Currency revaluation entries
+- Currency badge on mixed-currency views
+- Bank → Journal Entry currency validation on CSV import
