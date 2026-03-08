@@ -197,7 +197,7 @@ const PerformanceAnalysis = () => {
     },
   });
 
-  const isLoading = loadingAccounts || yearQueries.some((q) => q.isLoading);
+  const isLoading = loadingAccounts || loadingYears;
 
   // Compute per-year data
   const yearlyData: YearlyData[] = useMemo(() => {
