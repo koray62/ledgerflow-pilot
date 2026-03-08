@@ -209,7 +209,7 @@ export default function HelpChatbot() {
             {defaultCurrency === "TRY" ? "TFRS/MSUGT" : defaultCurrency === "SAR" ? "SOCPA" : defaultCurrency === "EUR" || defaultCurrency === "AED" ? "IFRS" : "US GAAP"} specialist
           </p>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleClose}>
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-foreground hover:text-foreground hover:bg-muted" onClick={handleClose}>
           <X className="h-4 w-4" />
         </Button>
       </div>
