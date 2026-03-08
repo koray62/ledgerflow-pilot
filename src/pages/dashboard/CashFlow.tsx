@@ -156,7 +156,7 @@ const CashFlow = () => {
   const runway = monthlyBurn > 0 ? netCashPosition / monthlyBurn : null;
   const showWarning = runway !== null && runway < 6;
 
-  // Build 12-month forecast starting from current date
+  // Build 12-month forecast starting from current date, with opening balance point
   const chartData = (() => {
     const now = new Date();
     const months: { month: string; label: string; start: Date; end: Date }[] = [];
@@ -171,8 +171,13 @@ const CashFlow = () => {
       });
     }
 
-    let running = netCashPosition;
-    return months.map((m) => {
+    // Opening balance data point
+    const result: { month: string; inflow: number; outflow: number; balance: number }[] = [
+      { month: "Opening", inflow: 0, outflow: 0, balance: cashBalance },
+    ];
+
+    let running = cashBalance;
+    months.forEach((m) => {
       let inflow = 0;
       let outflow = 0;
 
@@ -206,8 +211,10 @@ const CashFlow = () => {
       });
 
       running += inflow - outflow;
-      return { month: m.month, inflow, outflow, balance: running };
+      result.push({ month: m.month, inflow, outflow, balance: running });
     });
+
+    return result;
   })();
 
   const metrics = [
