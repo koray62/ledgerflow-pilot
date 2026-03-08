@@ -267,20 +267,6 @@ const IncomeStatement = () => {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <h2 className={`text-lg font-bold ${color}`}>{label}</h2>
-                  {compareEnabled ? (
-                    <div className="flex items-center gap-4">
-                      <span className={`font-mono text-sm font-bold ${color}`}>
-                        {yearLabels[0]}: {fmt(sectionTotal)}
-                      </span>
-                      {compBalances.map((cb, i) => (
-                        <span key={i} className="font-mono text-sm text-muted-foreground">
-                          {yearLabels[i + 1]}: {fmt(getSectionTotal(cb, type))}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className={`font-mono text-lg font-bold ${color}`}>{fmt(sectionTotal)}</span>
-                  )}
                 </div>
               </CardHeader>
               <CardContent>
