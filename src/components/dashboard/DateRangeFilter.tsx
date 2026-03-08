@@ -1,9 +1,10 @@
-import { format } from "date-fns";
+import { format, startOfMonth, isSameDay } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useMemo } from "react";
 
 interface DatePickerProps {
   label: string;
@@ -40,6 +41,23 @@ const DatePicker = ({ label, date, onDateChange }: DatePickerProps) => (
   </div>
 );
 
+interface Preset {
+  label: string;
+  getRange: () => [Date, Date];
+}
+
+const getPresets = (): Preset[] => {
+  const now = new Date();
+  const year = now.getFullYear();
+  return [
+    { label: "This Month", getRange: () => [startOfMonth(now), now] },
+    { label: "Q1", getRange: () => [new Date(year, 0, 1), new Date(year, 2, 31)] },
+    { label: "Q2", getRange: () => [new Date(year, 0, 1), new Date(year, 5, 30)] },
+    { label: "Q3", getRange: () => [new Date(year, 0, 1), new Date(year, 8, 30)] },
+    { label: "YTD", getRange: () => [new Date(year, 0, 1), now] },
+  ];
+};
+
 interface DateRangeFilterProps {
   startDate: Date | undefined;
   endDate: Date | undefined;
@@ -52,12 +70,41 @@ export const DateRangeFilter = ({
   endDate,
   onStartDateChange,
   onEndDateChange,
-}: DateRangeFilterProps) => (
-  <div className="flex flex-wrap items-center gap-3">
-    <DatePicker label="From" date={startDate} onDateChange={onStartDateChange} />
-    <DatePicker label="To" date={endDate} onDateChange={onEndDateChange} />
-  </div>
-);
+}: DateRangeFilterProps) => {
+  const presets = useMemo(() => getPresets(), []);
+
+  const activePreset = useMemo(() => {
+    if (!startDate || !endDate) return null;
+    return presets.find((p) => {
+      const [s, e] = p.getRange();
+      return isSameDay(startDate, s) && isSameDay(endDate, e);
+    })?.label ?? null;
+  }, [startDate, endDate, presets]);
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-1">
+        {presets.map((p) => (
+          <Button
+            key={p.label}
+            variant={activePreset === p.label ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 px-2.5 text-xs"
+            onClick={() => {
+              const [s, e] = p.getRange();
+              onStartDateChange(s);
+              onEndDateChange(e);
+            }}
+          >
+            {p.label}
+          </Button>
+        ))}
+      </div>
+      <DatePicker label="From" date={startDate} onDateChange={onStartDateChange} />
+      <DatePicker label="To" date={endDate} onDateChange={onEndDateChange} />
+    </div>
+  );
+};
 
 interface AsOfDateFilterProps {
   date: Date | undefined;

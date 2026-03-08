@@ -1,29 +1,25 @@
 
 
-## Add Preset Date Range Buttons
+## Problem
 
-### Overview
-Add quick-select preset buttons ("This Month", "Q1", "Q2", "Q3", "YTD") to the `DateRangeFilter` component. These appear as small toggle-style buttons next to the date pickers.
+In the "Review & Approve Journal Entries" table, the Amount column shows plain numbers (e.g., `50000`, `4.22`, `308.3`) without any sign indicator. Since journal entries always use absolute amounts (debit/credit accounts indicate direction), users can't tell at a glance whether the original transaction was an inflow or outflow.
 
-### Preset Logic (all relative to current year)
-- **This Month**: 1st of current month → today
-- **Q1**: Jan 1 → Mar 31
-- **Q2**: Jan 1 → Jun 30 (cumulative: Q1+Q2)
-- **Q3**: Jan 1 → Sep 30 (cumulative: Q1+Q2+Q3)
-- **YTD**: Jan 1 → today
+## Solution
 
-### Changes
+Enhance the Amount column in the suggestions review table to clearly indicate the direction of the original transaction:
 
-**`src/components/dashboard/DateRangeFilter.tsx`**
-- Add a `presets` array with label and date-computing functions
-- Render preset buttons as small `variant="ghost"` or `variant="outline"` buttons in a row below or beside the date pickers
-- Clicking a preset calls both `onStartDateChange` and `onEndDateChange` with the computed dates
-- Track active preset to highlight the selected one (compare current start/end dates against preset values)
-- Only show presets in the `DateRangeFilter` component (not `AsOfDateFilter`)
+1. **Color coding**: Green for inflows (credits/positive original amounts), red for outflows (debits/negative original amounts)
+2. **Prefix indicators**: Show `▲` or `+` for inflows and `▼` or `−` for outflows next to the amount
+3. **Apply to both states**: The pending (editable input) and approved (read-only span) views should both show the direction indicator
 
-### UI Layout
-The presets render as a row of compact buttons alongside the From/To pickers:
-```text
-[This Month] [Q1] [Q2] [Q3] [YTD]   From [date] To [date]
-```
+### Technical approach
+
+- Each suggestion object already has `originalTx.amount` which preserves the sign from the CSV. Use this to determine direction.
+- For the **read-only** display: format with color + arrow prefix based on `originalTx.amount` sign
+- For the **editable input**: add a colored badge/label next to the input showing the direction (e.g., a small "IN" or "OUT" badge), since the input itself shows the absolute journal amount
+- Apply similar treatment to the raw transaction preview table (line ~547) which already has color but could benefit from clearer `+`/`-` prefixes
+
+### Files to change
+
+- `src/pages/dashboard/BankAccounts.tsx` — Update the Amount cells in both the transaction preview table and the journal entry review table to include direction indicators and consistent color coding
 
