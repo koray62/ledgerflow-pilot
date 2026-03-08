@@ -500,7 +500,12 @@ export default function BankAccounts() {
         ? `Payment received for Invoice ${matchedInvoice!.invoice_number}`
         : s.description;
       // For invoice payment, use the AI-suggested debit account (bank CoA) as the debit side
-      const bankCoAId = s.debitAccountId;
+      // Resolve bank CoA: prefer debitAccountId, fall back to debit line in multi-line suggestion
+      let bankCoAId = s.debitAccountId;
+      if (!bankCoAId && s.lines?.length) {
+        const debitLine = s.lines.find((l: any) => l.debit > 0);
+        if (debitLine) bankCoAId = debitLine.accountId;
+      }
 
       // 1. Create journal entry
       const { data: je, error: jeErr } = await supabase.from("journal_entries").insert({
