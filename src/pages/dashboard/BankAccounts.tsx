@@ -399,8 +399,14 @@ export default function BankAccounts() {
     if (!parsedTxs.length || !chartAccounts.length) return;
     setAiLoading(true);
     try {
+      // Merge detailed description for AI context, but keep parsedTxs unchanged for storage
+      const txsForAI = parsedTxs.map(tx => ({
+        date: tx.date,
+        description: tx.detailedDescription ? `${tx.description} | ${tx.detailedDescription}` : tx.description,
+        amount: tx.amount,
+      }));
       const { data, error } = await supabase.functions.invoke("process-bank-csv", {
-        body: { transactions: parsedTxs, accounts: chartAccounts, vendors, customers },
+        body: { transactions: txsForAI, accounts: chartAccounts, vendors, customers },
       });
       if (error) throw error;
       const sug: AISuggestion[] = (data.suggestions || []).map((s: any) => ({
