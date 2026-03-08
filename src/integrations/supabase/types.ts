@@ -925,33 +925,42 @@ export type Database = {
       }
       tenants: {
         Row: {
+          address: string | null
           created_at: string
           deleted_at: string | null
           fiscal_year_end: number | null
           id: string
           industry: string | null
+          logo_url: string | null
           name: string
           settings: Json | null
+          tax_id: string | null
           updated_at: string
         }
         Insert: {
+          address?: string | null
           created_at?: string
           deleted_at?: string | null
           fiscal_year_end?: number | null
           id?: string
           industry?: string | null
+          logo_url?: string | null
           name: string
           settings?: Json | null
+          tax_id?: string | null
           updated_at?: string
         }
         Update: {
+          address?: string | null
           created_at?: string
           deleted_at?: string | null
           fiscal_year_end?: number | null
           id?: string
           industry?: string | null
+          logo_url?: string | null
           name?: string
           settings?: Json | null
+          tax_id?: string | null
           updated_at?: string
         }
         Relationships: []
