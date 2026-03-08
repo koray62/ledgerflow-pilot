@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, UserPlus, Shield, Trash2 } from "lucide-react";
 import AccessRightsTable from "@/components/dashboard/AccessRightsTable";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Constants } from "@/integrations/supabase/types";
 import type { Database } from "@/integrations/supabase/types";
 
