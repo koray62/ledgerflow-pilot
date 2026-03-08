@@ -382,7 +382,7 @@ const PerformanceAnalysis = () => {
       good: () => true,
     },
   ];
-
+};
 
   const handleExportPDF = async () => {
     setExporting(true);
