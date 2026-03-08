@@ -348,7 +348,7 @@ const PerformanceAnalysis = () => {
   ];
 
 
-  const handleExportPDF = useCallback(async () => {
+  const handleExportPDF = async () => {
     setExporting(true);
     try {
       const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
