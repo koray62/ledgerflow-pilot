@@ -75,7 +75,7 @@ interface YearlyData {
 }
 
 const PerformanceAnalysis = () => {
-  const { tenantId } = useTenant();
+  const { tenantId, tenantName } = useTenant();
   const chartsRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -362,9 +362,19 @@ const PerformanceAnalysis = () => {
       const contentW = pageW - margin * 2;
       let y = margin;
 
+      // --- Company Header ---
+      if (tenantName) {
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(100);
+        pdf.text(tenantName.toUpperCase(), margin, y + 4);
+        y += 8;
+      }
+
       // --- Title ---
       pdf.setFontSize(18);
       pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(0);
       pdf.text("Performance Analysis Report", margin, y + 6);
       y += 10;
       pdf.setFontSize(9);
@@ -373,6 +383,12 @@ const PerformanceAnalysis = () => {
       pdf.text(`${YEARS[0]}–${YEARS[3]} · Generated ${new Date().toLocaleDateString()}`, margin, y + 4);
       pdf.setTextColor(0);
       y += 12;
+
+      // --- Divider ---
+      pdf.setDrawColor(200);
+      pdf.setLineWidth(0.3);
+      pdf.line(margin, y, margin + contentW, y);
+      y += 6;
 
       // --- KPI Summary ---
       pdf.setFontSize(12);
@@ -516,22 +532,67 @@ const PerformanceAnalysis = () => {
       pdf.text("Financial Ratios Summary", margin, y);
       y += 7;
 
+      // --- Financial Ratios as Table ---
+      const ratioTableH = 8 + ratioCards.length * 6 + 2;
+      if (y + ratioTableH > pdf.internal.pageSize.getHeight() - margin) {
+        pdf.addPage();
+        y = margin;
+      }
+      pdf.setFontSize(12);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(0);
+      pdf.text("Financial Ratios Summary", margin, y);
+      y += 8;
+
+      // Table header
+      const ratioCols = ["Ratio", ...YEARS.map(String)];
+      const ratioColWidths = [52, ...YEARS.map(() => 32)];
       pdf.setFontSize(8);
-      ratioCards.forEach((rc) => {
-        if (y + 14 > pdf.internal.pageSize.getHeight() - margin) {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFillColor(235, 238, 245);
+      pdf.rect(margin, y - 1, contentW, 7, "F");
+      ratioCols.forEach((col, i) => {
+        const x = margin + ratioColWidths.slice(0, i).reduce((s, w) => s + w, 0);
+        pdf.setTextColor(60);
+        pdf.text(col, i === 0 ? x + 2 : x + ratioColWidths[i] - 2, y + 4, i === 0 ? {} : { align: "right" });
+      });
+      y += 8;
+
+      // Table rows
+      ratioCards.forEach((rc, ri) => {
+        if (y + 7 > pdf.internal.pageSize.getHeight() - margin) {
           pdf.addPage();
           y = margin;
         }
-        pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(40);
-        pdf.text(`${rc.title} — ${rc.description}`, margin + 1, y + 3);
-        y += 5;
+        // Alternating row background
+        if (ri % 2 === 0) {
+          pdf.setFillColor(248, 248, 252);
+          pdf.rect(margin, y - 1, contentW, 6, "F");
+        }
+        // Ratio name
         pdf.setFont("helvetica", "normal");
-        const valStr = rc.values.map((v) => `${v.year}: ${rc.format(v.value as any)}`).join("   |   ");
-        pdf.setTextColor(80);
-        pdf.text(valStr, margin + 3, y + 3);
-        y += 7;
+        pdf.setTextColor(40);
+        pdf.text(rc.title, margin + 2, y + 3.5);
+        // Year values
+        rc.values.forEach((v, vi) => {
+          const x = margin + ratioColWidths.slice(0, vi + 1).reduce((s, w) => s + w, 0) + ratioColWidths[vi + 1] - 2;
+          const formatted = rc.format(v.value as any);
+          pdf.setTextColor(60);
+          pdf.text(formatted, x, y + 3.5, { align: "right" });
+        });
+        y += 6;
       });
+
+      // Description footnotes
+      y += 3;
+      pdf.setFontSize(6.5);
+      pdf.setFont("helvetica", "italic");
+      pdf.setTextColor(140);
+      ratioCards.forEach((rc) => {
+        pdf.text(`${rc.title}: ${rc.description}`, margin + 2, y + 2.5);
+        y += 3.5;
+      });
+      y += 4;
 
       // --- Footer ---
       const totalPages = pdf.getNumberOfPages();
