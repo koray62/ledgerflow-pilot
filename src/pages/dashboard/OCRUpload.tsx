@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 
 const statusConfig: Record<string, { icon: typeof CheckCircle; colorClass: string; label: string }> = {
   uploaded: { icon: Clock, colorClass: "text-muted-foreground", label: "Queued" },

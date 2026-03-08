@@ -12,7 +12,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency as fmtCurrency } from "@/lib/utils";
+import { formatCurrency as fmtCurrency, formatDisplayDate } from "@/lib/utils";
 
 const DashboardOverview = () => {
   const { tenantId, defaultCurrency } = useTenant();

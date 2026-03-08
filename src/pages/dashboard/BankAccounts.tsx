@@ -31,7 +31,7 @@ import {
   Plus, Search, Pencil, Trash2, Upload, Loader2, Check, X, ExternalLink, CalendarIcon,
 } from "lucide-react";
 import { format, isAfter, isBefore, startOfDay } from "date-fns";
-import { cn, formatCurrency as fmtCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
+import { cn, formatCurrency as fmtCurrency, SUPPORTED_CURRENCIES, formatDisplayDate } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";

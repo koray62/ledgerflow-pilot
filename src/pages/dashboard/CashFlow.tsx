@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, subDays } from "date-fns";
-import { formatDisplayDate } from "@/lib/utils";
+// formatDisplayDate imported below with formatCurrency
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DateRangeFilter } from "@/components/dashboard/DateRangeFilter";
-import { formatCurrency as fmtCurrency } from "@/lib/utils";
+import { formatCurrency as fmtCurrency, formatDisplayDate } from "@/lib/utils";
 
 const CashFlow = () => {
   const { tenantId, defaultCurrency } = useTenant();
