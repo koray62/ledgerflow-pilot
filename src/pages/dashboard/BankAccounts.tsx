@@ -142,11 +142,12 @@ function parseCSV(text: string): { headers: string[]; rows: string[][] } {
 function autoDetectColumns(headers: string[]) {
   const lower = headers.map((h) => h.toLowerCase());
   const dateIdx = lower.findIndex((h) => /date/.test(h));
-  const descIdx = lower.findIndex((h) => /desc|narr|memo|detail|particular/.test(h));
+  const descIdx = lower.findIndex((h) => /desc|narr|memo|particular/.test(h));
+  const detailDescIdx = lower.findIndex((h, i) => i !== descIdx && /detail.*desc|full.*desc|remarks|additional/.test(h));
   const amtIdx = lower.findIndex((h) => /amount|sum|value/.test(h));
   const debitIdx = lower.findIndex((h) => /debit|withdrawal|dr/.test(h));
   const creditIdx = lower.findIndex((h) => /credit|deposit|cr/.test(h));
-  return { dateIdx, descIdx, amtIdx, debitIdx, creditIdx };
+  return { dateIdx, descIdx, detailDescIdx, amtIdx, debitIdx, creditIdx };
 }
 
 /* ─────────────────────────────────── COMPONENT ─────────────────────────────────── */
