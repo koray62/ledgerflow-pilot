@@ -74,6 +74,13 @@ const CashFlow = () => {
     return [dr.id, ...coaAccounts.filter(a => a.parent_id === dr.id).map(a => a.id)];
   }, [coaAccounts]);
 
+  // Sales Tax Payable account IDs (2500 and descendants)
+  const taxPayableAccountIds = useMemo(() => {
+    const tax = coaAccounts.find(a => a.code === "2500" && a.account_type === "liability");
+    if (!tax) return [];
+    return [tax.id, ...coaAccounts.filter(a => a.parent_id === tax.id).map(a => a.id)];
+  }, [coaAccounts]);
+
   // Revenue & Expense account IDs for computing Net Income (accrual mode)
   const revenueAccountIds = useMemo(
     () => coaAccounts.filter(a => a.account_type === "revenue").map(a => a.id),
