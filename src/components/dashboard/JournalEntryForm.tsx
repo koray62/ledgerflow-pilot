@@ -6,13 +6,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Plus, Trash2, Loader2, AlertCircle, RefreshCw, CalendarIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
-import { formatCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
+import { cn, formatCurrency, formatDisplayDate, SUPPORTED_CURRENCIES } from "@/lib/utils";
 import { useClosedFiscalYears } from "@/hooks/useClosedFiscalYears";
 
 interface JournalLine {
@@ -378,13 +380,38 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
             {/* Header fields */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="je-date" className="text-xs text-muted-foreground">Date</Label>
-                <Input
-                  id="je-date"
-                  type="date"
-                  value={entryDate}
-                  onChange={(e) => setEntryDate(e.target.value)}
-                />
+                <Label className="text-xs text-muted-foreground">Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "h-9 w-full justify-start text-left text-sm font-normal",
+                        !entryDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {entryDate
+                        ? formatDisplayDate(entryDate, currency)
+                        : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={entryDate ? new Date(entryDate + "T00:00:00") : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          const yyyy = date.getFullYear();
+                          const mm = String(date.getMonth() + 1).padStart(2, "0");
+                          const dd = String(date.getDate()).padStart(2, "0");
+                          setEntryDate(`${yyyy}-${mm}-${dd}`);
+                        }
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="je-desc" className="text-xs text-muted-foreground">Description *</Label>
