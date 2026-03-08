@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
@@ -165,6 +165,18 @@ const Invoices = () => {
     },
     enabled: !!tenantId,
   });
+
+  const [tenantLogoUrl, setTenantLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!tenant?.logo_url) { setTenantLogoUrl(null); return; }
+    const storedLogo = tenant.logo_url as string;
+    const path = storedLogo.includes("/storage/v1/")
+      ? storedLogo.split("/tenant-documents/").pop() ?? storedLogo
+      : storedLogo;
+    supabase.storage.from("tenant-documents").createSignedUrl(path, 3600).then(({ data }) => {
+      setTenantLogoUrl(data?.signedUrl ?? null);
+    });
+  }, [tenant?.logo_url]);
 
   /* ─── helpers ─── */
   const revenueAccounts = accounts.filter((a) => a.account_type === "revenue");
@@ -880,9 +892,9 @@ const Invoices = () => {
                 {/* ── Header: logo + company vs INVOICE title ── */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", borderBottom: "3px solid #1a1a2e", paddingBottom: "16px" }}>
                   <div style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
-                    {tenant?.logo_url && (
+                    {tenantLogoUrl && (
                       <img
-                        src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/tenant-documents/${tenant.logo_url}`}
+                        src={tenantLogoUrl}
                         alt="Company Logo"
                         style={{ width: "60px", height: "60px", objectFit: "contain", borderRadius: "6px" }}
                         crossOrigin="anonymous"
