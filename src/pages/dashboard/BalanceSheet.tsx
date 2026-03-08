@@ -1,11 +1,10 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
-import { formatDisplayDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useTenant } from "@/hooks/useTenant";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { AsOfDateFilter } from "@/components/dashboard/DateRangeFilter";
