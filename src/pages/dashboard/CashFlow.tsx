@@ -297,7 +297,7 @@ const CashFlow = () => {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">12-Month Cash Flow Forecast</CardTitle>
+          <CardTitle className="text-base">Cash Flow Forecast</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
