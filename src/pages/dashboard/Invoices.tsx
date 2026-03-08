@@ -267,14 +267,15 @@ const Invoices = () => {
   /* ─── generate next invoice number ─── */
   const nextInvoiceNumber = () => {
     const year = new Date().getFullYear();
-    const prefix = `${year}-INV-`;
+    const prefix = `LP${year}`;
     const nums = invoices
+      .filter((i) => i.invoice_number.startsWith(prefix))
       .map((i) => {
-        const m = i.invoice_number.match(/(\d+)$/);
-        return m ? parseInt(m[1]) : 0;
+        const seq = i.invoice_number.slice(prefix.length);
+        return seq ? parseInt(seq, 10) : 0;
       });
-    const max = nums.length > 0 ? Math.max(...nums) : 0;
-    return `${prefix}${String(max + 1).padStart(5, "0")}`;
+    const max = nums.length > 0 ? Math.max(...nums) : 100;
+    return `${prefix}${String(max + 1).padStart(6, "0")}`;
   };
 
   /* ─── validate ─── */
