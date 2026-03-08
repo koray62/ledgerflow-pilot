@@ -172,11 +172,14 @@ const Invoices = () => {
     (a) => a.account_type === "asset" && a.name.toLowerCase().includes("receivable")
   );
   const cashParent = accounts.find((a) => a.account_type === "asset" && a.code === "1000");
+  const cashChildIds = new Set(
+    cashParent ? accounts.filter((a) => a.parent_id === cashParent.id).map((a) => a.id) : []
+  );
   const cashBankAccounts = accounts.filter(
     (a) =>
       a.account_type === "asset" &&
-      a.code !== "1000" &&
-      (a.code.startsWith("1000") || a.code.startsWith("1010") || (cashParent && a.parent_id === cashParent.id))
+      a.id !== cashParent?.id &&
+      (a.parent_id === cashParent?.id || cashChildIds.has(a.parent_id ?? ""))
   );
   const vatAccount = accounts.find(
     (a) =>
