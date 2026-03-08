@@ -178,6 +178,7 @@ const DashboardLayout = () => {
         <main className="flex-1 overflow-y-auto">
           <Outlet />
         </main>
+        <HelpChatbot />
       </div>
     </TenantProvider>
   );
