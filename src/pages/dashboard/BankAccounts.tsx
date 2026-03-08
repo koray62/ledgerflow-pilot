@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
+import { useClosedFiscalYears } from "@/hooks/useClosedFiscalYears";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -152,6 +153,7 @@ export default function BankAccounts() {
   const { tenantId, defaultCurrency } = useTenant();
   const fmt = (n: number) => fmtCurrency(n, defaultCurrency);
   const { user } = useAuth();
+  const { isDateInClosedYear } = useClosedFiscalYears();
   const { toast } = useToast();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -414,6 +416,11 @@ export default function BankAccounts() {
     if (!tenantId || !importAccountId) return;
     const s = suggestions[idx];
     if (s.status !== "pending") return;
+    const txDate = s.originalTx.date || new Date().toISOString().slice(0, 10);
+    if (isDateInClosedYear(txDate)) {
+      toast({ title: "Closed fiscal year", description: "Cannot create transactions in a closed fiscal year.", variant: "destructive" });
+      return;
+    }
     setApproving(idx);
     try {
       // 1. Create journal entry
