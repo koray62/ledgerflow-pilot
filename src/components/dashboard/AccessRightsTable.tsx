@@ -46,6 +46,7 @@ const PERMISSION_DISPLAY: { category: string; key: string; label: string }[] = [
   { category: "Documents", key: "documents.edit", label: "Upload / process documents" },
   { category: "Documents", key: "documents.delete", label: "Delete documents" },
   { category: "Reports", key: "reports.view", label: "View financial reports" },
+  { category: "AI Assistant", key: "chatbot.use", label: "Use accounting chatbot" },
   { category: "Team", key: "team.view", label: "View team members" },
   { category: "Team", key: "team.manage", label: "Invite / remove members" },
   { category: "Settings", key: "settings.view", label: "View organization settings" },
