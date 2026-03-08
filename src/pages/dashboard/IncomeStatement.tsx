@@ -267,20 +267,6 @@ const IncomeStatement = () => {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <h2 className={`text-lg font-bold ${color}`}>{label}</h2>
-                  {compareEnabled ? (
-                    <div className="flex items-center gap-4">
-                      <span className={`font-mono text-sm font-bold ${color}`}>
-                        {yearLabels[0]}: {fmt(sectionTotal)}
-                      </span>
-                      {compBalances.map((cb, i) => (
-                        <span key={i} className="font-mono text-sm text-muted-foreground">
-                          {yearLabels[i + 1]}: {fmt(getSectionTotal(cb, type))}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className={`font-mono text-lg font-bold ${color}`}>{fmt(sectionTotal)}</span>
-                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -333,6 +319,21 @@ const IncomeStatement = () => {
                             ))}
                         </tr>
                       ))}
+                      {/* Section total row */}
+                      <tr className="border-t border-border bg-muted/40">
+                        <td className="py-2.5 text-sm font-semibold text-foreground pl-2">
+                          Total {label}
+                        </td>
+                        <td className={`py-2.5 text-right font-mono text-sm font-bold pr-2 ${color}`}>
+                          {fmt(sectionTotal)}
+                        </td>
+                        {compareEnabled &&
+                          compBalances.map((cb, i) => (
+                            <td key={i} className="py-2.5 text-right font-mono text-sm font-semibold text-muted-foreground pr-2">
+                              {fmt(getSectionTotal(cb, type))}
+                            </td>
+                          ))}
+                      </tr>
                     </tbody>
                   </table>
                 )}
