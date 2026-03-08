@@ -63,7 +63,7 @@ const Invoices = () => {
   const { user } = useAuth();
   const qc = useQueryClient();
   const { toast } = useToast();
-
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [formOpen, setFormOpen] = useState(false);
