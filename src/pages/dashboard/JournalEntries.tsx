@@ -101,7 +101,12 @@ const JournalEntries = () => {
         open={formOpen}
         onOpenChange={(open) => {
           setFormOpen(open);
-          if (!open) setEditEntryId(null);
+          if (!open) {
+            const dest = returnTo.current;
+            returnTo.current = null;
+            setEditEntryId(null);
+            if (dest) navigate(dest);
+          }
         }}
         editEntryId={editEntryId}
       />
