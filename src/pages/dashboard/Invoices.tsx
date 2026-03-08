@@ -204,6 +204,9 @@ const Invoices = () => {
       a.account_type === "liability" &&
       (a.name.toLowerCase().includes("vat") || a.name.toLowerCase().includes("tax payable"))
   );
+  const deferredRevenueAccount = accounts.find(
+    (a) => a.account_type === "liability" && a.code === "2200"
+  );
 
   const subtotal = lines.reduce((s, l) => s + l.amount, 0);
   const taxAmount = Math.round(subtotal * TAX_RATE * 100) / 100;
