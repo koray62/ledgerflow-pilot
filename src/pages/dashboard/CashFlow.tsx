@@ -24,16 +24,50 @@ const CashFlow = () => {
   const startStr = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
   const endStr = endDate ? format(endDate, "yyyy-MM-dd") : undefined;
 
-  // Cash balance from bank accounts
-  const { data: cashBalance = 0 } = useQuery({
-    queryKey: ["cf-cash", tenantId],
+  // Fetch chart of accounts to identify cash accounts
+  const { data: coaAccounts = [] } = useQuery({
+    queryKey: ["cf-accounts", tenantId],
     enabled: !!tenantId,
     queryFn: async () => {
       const { data } = await supabase
-        .from("bank_accounts")
-        .select("current_balance")
-        .eq("tenant_id", tenantId!);
-      return data?.reduce((s, a) => s + Number(a.current_balance), 0) ?? 0;
+        .from("chart_of_accounts")
+        .select("id, code, name, account_type, parent_id")
+        .eq("tenant_id", tenantId!)
+        .eq("is_active", true)
+        .is("deleted_at", null);
+      return data ?? [];
+    },
+  });
+
+  // Derive cash account IDs (code 1000 and all descendants)
+  const cashAccountIds = (() => {
+    const cashParent = coaAccounts.find(a => a.account_type === "asset" && a.code === "1000");
+    if (!cashParent) return [];
+    const childIds = new Set(
+      coaAccounts.filter(a => a.parent_id === cashParent.id).map(a => a.id)
+    );
+    // Include children and grandchildren
+    return coaAccounts
+      .filter(a =>
+        a.id === cashParent.id ||
+        a.parent_id === cashParent.id ||
+        childIds.has(a.parent_id ?? "")
+      )
+      .map(a => a.id);
+  })();
+
+  // Compute cash balance from posted journal lines on cash accounts
+  const { data: cashBalance = 0 } = useQuery({
+    queryKey: ["cf-cash", tenantId, cashAccountIds],
+    enabled: !!tenantId && cashAccountIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("journal_lines")
+        .select("debit, credit")
+        .eq("tenant_id", tenantId!)
+        .in("account_id", cashAccountIds)
+        .is("deleted_at", null);
+      return data?.reduce((s, l) => s + Number(l.debit) - Number(l.credit), 0) ?? 0;
     },
   });
 
