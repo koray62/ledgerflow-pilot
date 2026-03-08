@@ -26,8 +26,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Plus, Search, Pencil, Trash2, Upload, Loader2, Check, X, ExternalLink,
+  Plus, Search, Pencil, Trash2, Upload, Loader2, Check, X, ExternalLink, CalendarIcon,
 } from "lucide-react";
+import { format, isAfter, isBefore, startOfDay } from "date-fns";
+import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
 type BankAccount = Tables<"bank_accounts">;
@@ -172,7 +176,7 @@ export default function BankAccounts() {
   const [approving, setApproving] = useState<number | null>(null);
   const [bulkApproving, setBulkApproving] = useState(false);
   const [reviewFilters, setReviewFilters] = useState({ status: "", date: "", reference: "", description: "", debit: "", credit: "", amount: "" });
-  const [txFilters, setTxFilters] = useState({ date: "", description: "", reference: "", type: "", amount: "", reconciled: "" });
+  const [txFilters, setTxFilters] = useState<{ dateFrom: Date | undefined; dateTo: Date | undefined; description: string; reference: string; type: string; amount: string; reconciled: string }>({ dateFrom: undefined, dateTo: undefined, description: "", reference: "", type: "", amount: "", reconciled: "" });
 
   // Cache suggestions per bank account — persisted to sessionStorage so they survive unmounts
   const CACHE_KEY = "bankImportCache";
@@ -566,7 +570,33 @@ export default function BankAccounts() {
                     <TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Reference</TableHead><TableHead>Type</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Reconciled</TableHead><TableHead />
                   </TableRow>
                   <TableRow className="bg-muted/30">
-                    <TableHead className="py-1"><Input placeholder="Filter…" value={txFilters.date} onChange={(e) => setTxFilters((f) => ({ ...f, date: e.target.value }))} className="h-7 text-xs" /></TableHead>
+                    <TableHead className="py-1">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="sm" className={cn("h-7 w-full justify-start text-xs font-normal gap-1", !txFilters.dateFrom && !txFilters.dateTo && "text-muted-foreground")}>
+                            <CalendarIcon className="h-3 w-3 shrink-0" />
+                            {txFilters.dateFrom || txFilters.dateTo
+                              ? `${txFilters.dateFrom ? format(txFilters.dateFrom, "MM/dd") : "…"} – ${txFilters.dateTo ? format(txFilters.dateTo, "MM/dd") : "…"}`
+                              : "Date…"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0 space-y-0" align="start">
+                          <div className="flex gap-2 p-3">
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">From</p>
+                              <Calendar mode="single" selected={txFilters.dateFrom} onSelect={(d) => setTxFilters((f) => ({ ...f, dateFrom: d }))} className="p-2 pointer-events-auto" />
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">To</p>
+                              <Calendar mode="single" selected={txFilters.dateTo} onSelect={(d) => setTxFilters((f) => ({ ...f, dateTo: d }))} className="p-2 pointer-events-auto" />
+                            </div>
+                          </div>
+                          <div className="border-t border-border p-2 flex justify-end">
+                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setTxFilters((f) => ({ ...f, dateFrom: undefined, dateTo: undefined }))}>Clear</Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </TableHead>
                     <TableHead className="py-1"><Input placeholder="Filter…" value={txFilters.description} onChange={(e) => setTxFilters((f) => ({ ...f, description: e.target.value }))} className="h-7 text-xs" /></TableHead>
                     <TableHead className="py-1"><Input placeholder="Filter…" value={txFilters.reference} onChange={(e) => setTxFilters((f) => ({ ...f, reference: e.target.value }))} className="h-7 text-xs" /></TableHead>
                     <TableHead className="py-1"><Input placeholder="Filter…" value={txFilters.type} onChange={(e) => setTxFilters((f) => ({ ...f, type: e.target.value }))} className="h-7 text-xs" /></TableHead>
@@ -579,7 +609,8 @@ export default function BankAccounts() {
                   {transactions
                     .filter((t) => {
                       const f = txFilters;
-                      if (f.date && !t.transaction_date.toLowerCase().includes(f.date.toLowerCase())) return false;
+                      if (f.dateFrom && isBefore(startOfDay(new Date(t.transaction_date + "T00:00:00")), startOfDay(f.dateFrom))) return false;
+                      if (f.dateTo && isAfter(startOfDay(new Date(t.transaction_date + "T00:00:00")), startOfDay(f.dateTo))) return false;
                       if (f.description && !t.description.toLowerCase().includes(f.description.toLowerCase())) return false;
                       if (f.reference && !(t.reference ?? "").toLowerCase().includes(f.reference.toLowerCase())) return false;
                       if (f.type && !t.transaction_type.toLowerCase().includes(f.type.toLowerCase())) return false;
