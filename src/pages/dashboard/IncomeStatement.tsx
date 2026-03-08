@@ -89,6 +89,9 @@ const computeBalances = (
   return map;
 };
 
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS_LIST = [CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR];
+
 const IncomeStatement = () => {
   const { tenantId } = useTenant();
   const [startDate, setStartDate] = useState<Date | undefined>(startOfYear(new Date()));
