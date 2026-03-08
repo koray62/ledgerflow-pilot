@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { TenantProvider } from "@/hooks/useTenant";
+import HelpChatbot from "@/components/dashboard/HelpChatbot";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const navItems = [
@@ -177,6 +178,7 @@ const DashboardLayout = () => {
         <main className="flex-1 overflow-y-auto">
           <Outlet />
         </main>
+        <HelpChatbot />
       </div>
     </TenantProvider>
   );
