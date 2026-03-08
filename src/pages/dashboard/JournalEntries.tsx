@@ -22,16 +22,20 @@ const statusColors: Record<string, string> = {
 const JournalEntries = () => {
   const { tenantId } = useTenant();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editEntryId, setEditEntryId] = useState<string | null>(null);
+  const returnTo = useRef<string | null>(null);
 
   // Auto-open journal entry from URL param (e.g. from CoA ledger link)
   useEffect(() => {
     const editId = searchParams.get("edit");
+    const from = searchParams.get("from");
     if (editId) {
       setEditEntryId(editId);
       setFormOpen(true);
+      if (from === "coa") returnTo.current = "/dashboard/chart-of-accounts";
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
