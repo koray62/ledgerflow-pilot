@@ -603,7 +603,7 @@ const ChartOfAccounts = () => {
                 <TableBody>
                   {ledgerRows.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell className="font-mono text-xs">{row.date}</TableCell>
+                      <TableCell className="font-mono text-xs">{formatDisplayDate(row.date, defaultCurrency)}</TableCell>
                       <TableCell
                         className="font-mono text-xs text-accent underline cursor-pointer hover:text-accent/80"
                         onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/journal?edit=${row.journalEntryId}&from=coa`); }}
