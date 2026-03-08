@@ -167,12 +167,26 @@ const CashFlow = () => {
           <h1 className="text-2xl font-bold text-foreground">Cash Flow</h1>
           <p className="text-sm text-muted-foreground">Historical and projected cash flow analysis</p>
         </div>
-        <DateRangeFilter
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-        />
+        <div className="flex items-center gap-3">
+          <DateRangeFilter
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs text-muted-foreground"
+            onClick={() => {
+              setStartDate(subDays(new Date(), 30));
+              setEndDate(new Date());
+            }}
+          >
+            <RotateCcw className="h-3.5 w-3.5 mr-1" />
+            Reset
+          </Button>
+        </div>
       </div>
 
       {showWarning && (
