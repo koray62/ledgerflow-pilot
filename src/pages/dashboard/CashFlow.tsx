@@ -272,6 +272,156 @@ const CashFlow = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Detailed Cash Flow Data Table */}
+      <Card className="mt-6">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Detailed Cash Flow Items</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            {/* Outstanding Invoices (Inflows) */}
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-500 mb-2">Expected Inflows — Outstanding Invoices</h3>
+              {outstandingInvoices.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No outstanding invoices.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Due Date</th>
+                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Status</th>
+                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Total</th>
+                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Paid</th>
+                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Outstanding</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {outstandingInvoices.map((inv, i) => {
+                      const outstanding = Number(inv.total_amount) - Number(inv.amount_paid);
+                      return (
+                        <tr key={i} className="border-b border-border/30 hover:bg-muted/50">
+                          <td className="py-2 text-foreground">{format(new Date(inv.due_date), "MMM d, yyyy")}</td>
+                          <td className="py-2">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              inv.status === "overdue"
+                                ? "bg-destructive/10 text-destructive"
+                                : "bg-accent/10 text-accent"
+                            }`}>
+                              {inv.status}
+                            </span>
+                          </td>
+                          <td className="py-2 text-right font-mono text-muted-foreground">{formatCurrency(Number(inv.total_amount))}</td>
+                          <td className="py-2 text-right font-mono text-muted-foreground">{formatCurrency(Number(inv.amount_paid))}</td>
+                          <td className="py-2 text-right font-mono font-medium text-emerald-500">{formatCurrency(outstanding)}</td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="border-t border-border bg-muted/30">
+                      <td colSpan={4} className="py-2 text-sm font-semibold text-foreground">Total Expected Inflows</td>
+                      <td className="py-2 text-right font-mono font-bold text-emerald-500">
+                        {formatCurrency(outstandingInvoices.reduce((s, inv) => s + Number(inv.total_amount) - Number(inv.amount_paid), 0))}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Outstanding Bills (Outflows) */}
+            <div>
+              <h3 className="text-sm font-semibold text-destructive mb-2">Expected Outflows — Outstanding Bills</h3>
+              {outstandingBills.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No outstanding bills.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Due Date</th>
+                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Status</th>
+                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Total</th>
+                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Paid</th>
+                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Outstanding</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {outstandingBills.map((bill, i) => {
+                      const outstanding = Number(bill.total_amount) - Number(bill.amount_paid);
+                      return (
+                        <tr key={i} className="border-b border-border/30 hover:bg-muted/50">
+                          <td className="py-2 text-foreground">{format(new Date(bill.due_date), "MMM d, yyyy")}</td>
+                          <td className="py-2">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              bill.status === "overdue"
+                                ? "bg-destructive/10 text-destructive"
+                                : "bg-accent/10 text-accent"
+                            }`}>
+                              {bill.status}
+                            </span>
+                          </td>
+                          <td className="py-2 text-right font-mono text-muted-foreground">{formatCurrency(Number(bill.total_amount))}</td>
+                          <td className="py-2 text-right font-mono text-muted-foreground">{formatCurrency(Number(bill.amount_paid))}</td>
+                          <td className="py-2 text-right font-mono font-medium text-destructive">{formatCurrency(outstanding)}</td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="border-t border-border bg-muted/30">
+                      <td colSpan={4} className="py-2 text-sm font-semibold text-foreground">Total Expected Outflows</td>
+                      <td className="py-2 text-right font-mono font-bold text-destructive">
+                        {formatCurrency(outstandingBills.reduce((s, b) => s + Number(b.total_amount) - Number(b.amount_paid), 0))}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Forecast Entries */}
+            <div>
+              <h3 className="text-sm font-semibold text-accent mb-2">Forecast Entries</h3>
+              {forecasts.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No forecast entries.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Date</th>
+                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Description</th>
+                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Category</th>
+                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Type</th>
+                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {forecasts.map((f, i) => {
+                      const amt = Number(f.amount);
+                      return (
+                        <tr key={i} className="border-b border-border/30 hover:bg-muted/50">
+                          <td className="py-2 text-foreground">{format(new Date(f.forecast_date), "MMM d, yyyy")}</td>
+                          <td className="py-2 text-foreground">{f.description}</td>
+                          <td className="py-2 text-muted-foreground">{f.category ?? "—"}</td>
+                          <td className="py-2">
+                            {f.is_recurring ? (
+                              <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">
+                                Recurring · {f.recurrence_interval}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">One-time</span>
+                            )}
+                          </td>
+                          <td className={`py-2 text-right font-mono font-medium ${amt >= 0 ? "text-emerald-500" : "text-destructive"}`}>
+                            {amt >= 0 ? "+" : "−"}{formatCurrency(Math.abs(amt))}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
