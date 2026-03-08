@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
 
         const dateStr = `${year}-${String(month).padStart(2, "0")}`;
         const entryDate = `${dateStr}-15`;
-        const status = year < 2025 ? "posted" : (month <= 9 ? "posted" : "draft");
+        const status = (year < currentYear || (year === currentYear && month <= currentMonth - 2)) ? "posted" : "draft";
         const postedAt = status === "posted" ? `${dateStr}-16T00:00:00Z` : null;
 
         // 1) Revenue - Product Sales
