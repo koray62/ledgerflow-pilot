@@ -601,7 +601,7 @@ const PerformanceAnalysis = () => {
         pdf.setFontSize(7);
         pdf.setTextColor(160);
         pdf.text(
-          `LedgerPilot · Performance Analysis · Page ${p} of ${totalPages}`,
+          `${tenantName || "LedgerPilot"} · Performance Analysis · Page ${p} of ${totalPages}`,
           pageW / 2,
           pdf.internal.pageSize.getHeight() - 6,
           { align: "center" }
