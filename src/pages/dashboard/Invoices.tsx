@@ -494,7 +494,8 @@ const Invoices = () => {
         .eq("id", paymentInvoiceId);
 
       qc.invalidateQueries({ queryKey: ["invoices"] });
-      qc.invalidateQueries({ queryKey: ["journal_entries"] });
+      qc.invalidateQueries({ queryKey: ["journal-entries"] });
+      qc.invalidateQueries({ queryKey: ["journal-line-totals"] });
       toast({ title: "Payment recorded", description: `Invoice ${inv.invoice_number} marked as paid` });
       setPaymentOpen(false);
       setPaymentInvoiceId(null);
