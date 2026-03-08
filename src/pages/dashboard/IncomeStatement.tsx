@@ -24,6 +24,23 @@ interface Account {
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Math.abs(n));
 
+const pctChange = (current: number, previous: number): string | null => {
+  if (previous === 0) return current === 0 ? null : "+∞";
+  const pct = ((current - previous) / Math.abs(previous)) * 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+};
+
+const PctBadge = ({ current, previous }: { current: number; previous: number }) => {
+  const pct = pctChange(current, previous);
+  if (!pct) return null;
+  const isPositive = pct.startsWith("+");
+  return (
+    <div className={`text-[10px] leading-tight ${isPositive ? "text-success" : "text-destructive"}`}>
+      {pct}
+    </div>
+  );
+};
+
 const fetchLineTotals = async (
   tenantId: string,
   startStr?: string,
