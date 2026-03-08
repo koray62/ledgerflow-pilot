@@ -59,6 +59,39 @@ const fetchLineTotals = async (tenantId: string, startStr: string, endStr: strin
   return data ?? [];
 };
 
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const fetchMonthlyLineTotals = async (tenantId: string, year: number) => {
+  const { data: entries } = await supabase
+    .from("journal_entries")
+    .select("id, entry_date")
+    .eq("tenant_id", tenantId)
+    .eq("status", "posted")
+    .is("deleted_at", null)
+    .gte("entry_date", `${year}-01-01`)
+    .lte("entry_date", `${year}-12-31`);
+
+  if (!entries || entries.length === 0) return [];
+
+  const entryIds = entries.map((e) => e.id);
+  const { data: lines } = await supabase
+    .from("journal_lines")
+    .select("account_id, debit, credit, journal_entry_id")
+    .eq("tenant_id", tenantId)
+    .is("deleted_at", null)
+    .in("journal_entry_id", entryIds);
+
+  // Attach month to each line
+  const entryMonthMap = new Map<string, number>();
+  for (const e of entries) {
+    entryMonthMap.set(e.id, new Date(e.entry_date).getMonth());
+  }
+
+  return (lines ?? []).map((l) => ({
+    ...l,
+    month: entryMonthMap.get(l.journal_entry_id) ?? 0,
+  }));
+
 interface YearlyData {
   year: number;
   revenue: number;
