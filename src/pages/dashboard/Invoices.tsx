@@ -166,6 +166,18 @@ const Invoices = () => {
     enabled: !!tenantId,
   });
 
+  const [tenantLogoUrl, setTenantLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!tenant?.logo_url) { setTenantLogoUrl(null); return; }
+    const storedLogo = tenant.logo_url as string;
+    const path = storedLogo.includes("/storage/v1/")
+      ? storedLogo.split("/tenant-documents/").pop() ?? storedLogo
+      : storedLogo;
+    supabase.storage.from("tenant-documents").createSignedUrl(path, 3600).then(({ data }) => {
+      setTenantLogoUrl(data?.signedUrl ?? null);
+    });
+  }, [tenant?.logo_url]);
+
   /* ─── helpers ─── */
   const revenueAccounts = accounts.filter((a) => a.account_type === "revenue");
   const arAccount = accounts.find(
