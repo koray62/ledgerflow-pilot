@@ -516,6 +516,14 @@ const CashFlow = () => {
                     {formatCurrency(accrualDeferredRevChange)}
                   </td>
                 </tr>
+                <tr className="border-b border-border/30">
+                  <td className="py-2.5 text-muted-foreground pl-4">
+                    Add: Increase in Sales Tax Payable
+                  </td>
+                  <td className={`py-2.5 text-right font-mono ${accrualTaxPayableChange >= 0 ? "text-success" : "text-destructive"}`}>
+                    {formatCurrency(accrualTaxPayableChange)}
+                  </td>
+                </tr>
                 <tr className="border-t-2 border-border">
                   <td className="py-2.5 font-semibold text-foreground">Net Cash from Operations</td>
                   <td className={`py-2.5 text-right font-mono font-bold ${accrualNetCashFromOps >= 0 ? "text-success" : "text-destructive"}`}>
