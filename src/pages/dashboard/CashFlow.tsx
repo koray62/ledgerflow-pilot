@@ -359,6 +359,20 @@ const CashFlow = () => {
               </ComposedChart>
             </ResponsiveContainer>
           )}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-4">
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="inline-block h-2.5 w-5 rounded-sm" style={{ backgroundColor: "hsl(142 71% 45%)" }} />
+              Inflows
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="inline-block h-2.5 w-5 rounded-sm" style={{ backgroundColor: "hsl(0 84% 60%)" }} />
+              Expenses
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="inline-block h-2.5 w-5 rounded-sm border" style={{ backgroundColor: "hsl(var(--accent) / 0.25)", borderColor: "hsl(var(--accent))" }} />
+              Net Cash (right axis)
+            </span>
+          </div>
         </CardContent>
       </Card>
 
