@@ -322,10 +322,10 @@ const CashFlow = () => {
     }
 
     const result: { month: string; inflow: number; outflow: number; balance: number }[] = [
-      { month: "Opening", inflow: 0, outflow: 0, balance: cashBalance },
+      { month: "Opening", inflow: 0, outflow: 0, balance: openingCashBalance },
     ];
 
-    let running = cashBalance;
+    let running = openingCashBalance;
     months.forEach((m) => {
       let inflow = 0;
       let outflow = 0;
