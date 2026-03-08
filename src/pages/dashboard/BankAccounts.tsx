@@ -172,6 +172,7 @@ export default function BankAccounts() {
   const [approving, setApproving] = useState<number | null>(null);
   const [bulkApproving, setBulkApproving] = useState(false);
   const [reviewFilters, setReviewFilters] = useState({ status: "", date: "", reference: "", description: "", debit: "", credit: "", amount: "" });
+  const [txFilters, setTxFilters] = useState({ date: "", description: "", reference: "", type: "", amount: "", reconciled: "" });
 
   // Cache suggestions per bank account — persisted to sessionStorage so they survive unmounts
   const CACHE_KEY = "bankImportCache";
