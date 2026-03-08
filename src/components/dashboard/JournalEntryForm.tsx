@@ -243,12 +243,13 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
 
         if (updateErr) throw updateErr;
 
-        // Delete old lines and insert new ones
+        // Soft-delete old lines (editors can update but only owners can hard-delete)
         await supabase
           .from("journal_lines")
-          .delete()
+          .update({ deleted_at: new Date().toISOString() })
           .eq("journal_entry_id", editEntryId)
-          .eq("tenant_id", tenantId);
+          .eq("tenant_id", tenantId)
+          .is("deleted_at", null);
 
         const lineRows = lines
           .filter((l) => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
