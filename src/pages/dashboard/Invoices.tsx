@@ -399,9 +399,6 @@ const Invoices = () => {
           .single();
         if (jeErr) throw jeErr;
 
-        /* determine revenue account — use first line's account or first revenue account */
-        const revenueAccountId =
-          lines[0]?.account_id || revenueAccounts[0]?.id;
 
         const journalLines: any[] = [];
 
