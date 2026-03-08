@@ -130,14 +130,20 @@ const PerformanceAnalysis = () => {
     },
   });
 
-  // Fetch line totals for each year
-  const yearQueries = YEARS.map((year) =>
-    useQuery({
-      queryKey: ["perf-lines", tenantId, year],
-      enabled: !!tenantId,
-      queryFn: () => fetchLineTotals(tenantId!, `${year}-01-01`, `${year}-12-31`),
-    })
-  );
+  // Fetch line totals for all years in a single query
+  const { data: allYearLines = {}, isLoading: loadingYears } = useQuery({
+    queryKey: ["perf-lines-all", tenantId],
+    enabled: !!tenantId,
+    queryFn: async () => {
+      const result: Record<number, Awaited<ReturnType<typeof fetchLineTotals>>> = {};
+      await Promise.all(
+        YEARS.map(async (year) => {
+          result[year] = await fetchLineTotals(tenantId!, `${year}-01-01`, `${year}-12-31`);
+        })
+      );
+      return result;
+    },
+  });
 
   // Monthly drill-down query
   const { data: monthlyLines = [], isLoading: loadingMonthly } = useQuery({
@@ -191,7 +197,7 @@ const PerformanceAnalysis = () => {
     },
   });
 
-  const isLoading = loadingAccounts || yearQueries.some((q) => q.isLoading);
+  const isLoading = loadingAccounts || loadingYears;
 
   // Compute per-year data
   const yearlyData: YearlyData[] = useMemo(() => {
@@ -201,7 +207,7 @@ const PerformanceAnalysis = () => {
     const expenseAccIds = new Set(accounts.filter((a) => a.account_type === "expense").map((a) => a.id));
 
     const results: YearlyData[] = YEARS.map((year, idx) => {
-      const lines = yearQueries[idx].data ?? [];
+      const lines = allYearLines[year] ?? [];
 
       let revenue = 0;
       let expenses = 0;
@@ -254,7 +260,7 @@ const PerformanceAnalysis = () => {
     }
 
     return results;
-  }, [isLoading, accounts, yearQueries, cashBalance, arData, apData]);
+  }, [isLoading, accounts, allYearLines, cashBalance, arData, apData]);
 
   // Monthly drill-down data
   const monthlyData = useMemo(() => {
@@ -297,6 +303,14 @@ const PerformanceAnalysis = () => {
         : null,
     };
   }, [yearlyData]);
+
+  // Monthly totals for drill-down
+  const monthlyTotals = useMemo(() => {
+    const totalRev = monthlyData.reduce((s, m) => s + m.revenue, 0);
+    const totalExp = monthlyData.reduce((s, m) => s + m.expenses, 0);
+    const totalNet = totalRev - totalExp;
+    return { revenue: totalRev, expenses: totalExp, netIncome: totalNet };
+  }, [monthlyData]);
 
   const current = yearlyData.find((d) => d.year === CURRENT_YEAR);
   const previous = yearlyData.find((d) => d.year === CURRENT_YEAR - 1);
@@ -409,13 +423,7 @@ const PerformanceAnalysis = () => {
     },
   ];
 
-  // Monthly totals for drill-down
-  const monthlyTotals = useMemo(() => {
-    const totalRev = monthlyData.reduce((s, m) => s + m.revenue, 0);
-    const totalExp = monthlyData.reduce((s, m) => s + m.expenses, 0);
-    const totalNet = totalRev - totalExp;
-    return { revenue: totalRev, expenses: totalExp, netIncome: totalNet };
-  }, [monthlyData]);
+  
 
   // PDF Export
   const handleExportPDF = async () => {
