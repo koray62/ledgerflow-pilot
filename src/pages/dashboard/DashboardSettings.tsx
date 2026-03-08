@@ -275,6 +275,28 @@ const DashboardSettings = () => {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label className="text-xs">Accounting Method</Label>
+                <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                  Controls how revenue and expenses are recognized on financial statements.
+                </p>
+                <RadioGroup value={accountingBasis} onValueChange={setAccountingBasis} className="space-y-2">
+                  <div className="flex items-start gap-3 rounded-lg border border-border p-3">
+                    <RadioGroupItem value="accrual" id="basis-accrual" className="mt-0.5" />
+                    <div>
+                      <Label htmlFor="basis-accrual" className="text-sm font-medium cursor-pointer">Accrual Basis</Label>
+                      <p className="text-xs text-muted-foreground">Revenue recognized when earned, expenses when incurred. Required by GAAP/IFRS.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-lg border border-border p-3">
+                    <RadioGroupItem value="cash" id="basis-cash" className="mt-0.5" />
+                    <div>
+                      <Label htmlFor="basis-cash" className="text-sm font-medium cursor-pointer">Cash Basis</Label>
+                      <p className="text-xs text-muted-foreground">Revenue recognized when cash received, expenses when cash paid. Simpler but less precise.</p>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </div>
             </div>
             {can("settings.edit") && (
               <Button variant="hero" size="sm" className="mt-4" onClick={handleSave} disabled={saving || !name.trim()}>
