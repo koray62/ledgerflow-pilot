@@ -312,14 +312,17 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
 
         // Create forecast entry if recurring
         if (isRecurring) {
-          const netAmount = lineRows.reduce((s, l) => s + l.debit - l.credit, 0);
+          const totalDebit = lineRows.reduce((s, l) => s + Number(l.debit || 0), 0);
+          const totalCredit = lineRows.reduce((s, l) => s + Number(l.credit || 0), 0);
+          const forecastAmount = totalDebit >= totalCredit ? totalDebit : totalCredit;
+          const forecastCategory = totalDebit >= totalCredit ? "expense" : "revenue";
 
           await supabase.from("forecast_entries").insert({
             tenant_id: tenantId,
             forecast_date: entryDate,
             description: description.trim(),
-            amount: netAmount,
-            category: netAmount >= 0 ? "expense" : "revenue",
+            amount: forecastAmount,
+            category: forecastCategory,
             is_recurring: true,
             recurrence_interval: recurrenceInterval,
             created_by: user.id,
