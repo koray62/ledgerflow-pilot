@@ -130,14 +130,20 @@ const PerformanceAnalysis = () => {
     },
   });
 
-  // Fetch line totals for each year
-  const yearQueries = YEARS.map((year) =>
-    useQuery({
-      queryKey: ["perf-lines", tenantId, year],
-      enabled: !!tenantId,
-      queryFn: () => fetchLineTotals(tenantId!, `${year}-01-01`, `${year}-12-31`),
-    })
-  );
+  // Fetch line totals for all years in a single query
+  const { data: allYearLines = {}, isLoading: loadingYears } = useQuery({
+    queryKey: ["perf-lines-all", tenantId],
+    enabled: !!tenantId,
+    queryFn: async () => {
+      const result: Record<number, Awaited<ReturnType<typeof fetchLineTotals>>> = {};
+      await Promise.all(
+        YEARS.map(async (year) => {
+          result[year] = await fetchLineTotals(tenantId!, `${year}-01-01`, `${year}-12-31`);
+        })
+      );
+      return result;
+    },
+  });
 
   // Monthly drill-down query
   const { data: monthlyLines = [], isLoading: loadingMonthly } = useQuery({
