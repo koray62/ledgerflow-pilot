@@ -137,6 +137,9 @@ Deno.serve(async (req) => {
       }))
     );
 
+    // Seed default permissions for the new tenant
+    await supabaseAdmin.rpc("seed_tenant_permissions", { _tenant_id: tenant.id });
+
     return new Response(
       JSON.stringify({ tenantId: tenant.id }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
