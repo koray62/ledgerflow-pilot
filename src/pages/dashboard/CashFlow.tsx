@@ -143,6 +143,26 @@ const CashFlow = () => {
     },
   });
 
+  // Future-dated journal entries touching cash accounts (for projection)
+  const now = new Date();
+  const currentMonthStr = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
+  const { data: futureCashJournalLines = [] } = useQuery({
+    queryKey: ["cf-future-je-lines", tenantId, cashAccountIds, currentMonthStr, endStr],
+    enabled: !!tenantId && cashAccountIds.length > 0,
+    queryFn: async () => {
+      let query = supabase
+        .from("journal_lines")
+        .select("debit, credit, journal_entry_id, journal_entries!inner(entry_date)")
+        .eq("tenant_id", tenantId!)
+        .in("account_id", cashAccountIds)
+        .is("deleted_at", null)
+        .gte("journal_entries.entry_date", currentMonthStr);
+      if (endStr) query = query.lte("journal_entries.entry_date", endStr);
+      const { data } = await query;
+      return (data ?? []) as Array<{ debit: number; credit: number; journal_entries: { entry_date: string } }>;
+    },
+  });
+
   // Outstanding invoices (AR inflows)
   const { data: outstandingInvoices = [] } = useQuery({
     queryKey: ["cf-invoices", tenantId, startStr, endStr],
