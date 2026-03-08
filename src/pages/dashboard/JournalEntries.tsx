@@ -36,6 +36,7 @@ const JournalEntries = () => {
       setEditEntryId(editId);
       setFormOpen(true);
       if (from === "coa") returnTo.current = "/dashboard/accounts";
+      if (from === "invoices") returnTo.current = "/dashboard/invoices";
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
