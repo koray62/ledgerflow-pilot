@@ -722,33 +722,39 @@ const ChartOfAccounts = () => {
                         </td>
                         <td className="py-3 text-right">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                              title="Edit account"
-                              onClick={(e) => { e.stopPropagation(); openEditAccount(acc); }}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                              title="Delete account"
-                              onClick={(e) => { e.stopPropagation(); handleDeleteClick(acc); }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                              title="Add sub-account"
-                              onClick={(e) => { e.stopPropagation(); openAddSubAccount(acc); }}
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                            </Button>
+                            {can("accounts.edit") && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0"
+                                  title="Edit account"
+                                  onClick={(e) => { e.stopPropagation(); openEditAccount(acc); }}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0"
+                                  title="Add sub-account"
+                                  onClick={(e) => { e.stopPropagation(); openAddSubAccount(acc); }}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
+                            {can("accounts.delete") && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                title="Delete account"
+                                onClick={(e) => { e.stopPropagation(); handleDeleteClick(acc); }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
