@@ -76,6 +76,8 @@ interface YearlyData {
 
 const PerformanceAnalysis = () => {
   const { tenantId } = useTenant();
+  const chartsRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
 
   // Fetch accounts
   const { data: accounts = [], isLoading: loadingAccounts } = useQuery({
