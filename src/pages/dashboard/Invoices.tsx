@@ -1009,16 +1009,6 @@ const Invoices = () => {
                         Tax ID: {(previewInvoice.customers as any).tax_id}
                       </p>
                     )}
-                    {(previewInvoice.customers as any)?.email && (
-                      <p style={{ margin: "2px 0", fontSize: "9pt", color: "#555" }}>
-                        {(previewInvoice.customers as any).email}
-                      </p>
-                    )}
-                    {(previewInvoice.customers as any)?.phone && (
-                      <p style={{ margin: "2px 0", fontSize: "9pt", color: "#555" }}>
-                        {(previewInvoice.customers as any).phone}
-                      </p>
-                    )}
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <table style={{ marginLeft: "auto", borderCollapse: "collapse", fontSize: "9pt" }}>
