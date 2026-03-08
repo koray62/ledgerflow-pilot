@@ -18,6 +18,7 @@ import Contacts from "./pages/dashboard/Contacts";
 import DashboardSettings from "./pages/dashboard/DashboardSettings";
 import PlaceholderPage from "./components/dashboard/PlaceholderPage";
 import BankAccounts from "./pages/dashboard/BankAccounts";
+import Invoices from "./pages/dashboard/Invoices";
 import Team from "./pages/dashboard/Team";
 import BalanceSheet from "./pages/dashboard/BalanceSheet";
 import IncomeStatement from "./pages/dashboard/IncomeStatement";
@@ -47,7 +48,7 @@ const App = () => (
               <Route path="balance-sheet" element={<BalanceSheet />} />
               <Route path="income-statement" element={<IncomeStatement />} />
               <Route path="performance" element={<PerformanceAnalysis />} />
-              <Route path="invoices" element={<PlaceholderPage title="Invoices & Bills" description="Track accounts receivable and payable" />} />
+              <Route path="invoices" element={<Invoices />} />
               <Route path="contacts" element={<Contacts />} />
               <Route path="team" element={<Team />} />
             </Route>
