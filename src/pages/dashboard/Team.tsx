@@ -57,7 +57,7 @@ interface TeamMember {
 }
 
 export default function Team() {
-  const { tenantId, role: currentUserRole } = useTenant();
+  const { tenantId, role: currentUserRole, defaultCurrency } = useTenant();
   const { user } = useAuth();
   const { toast } = useToast();
   const { can } = usePermissions();
