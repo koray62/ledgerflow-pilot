@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
-import { formatCurrency as fmtCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
+import { formatCurrency as fmtCurrency, SUPPORTED_CURRENCIES, formatDisplayDate } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useClosedFiscalYears } from "@/hooks/useClosedFiscalYears";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -652,8 +652,8 @@ const Invoices = () => {
                   <TableRow key={inv.id}>
                     <TableCell className="font-medium">{inv.invoice_number}</TableCell>
                     <TableCell>{(inv.customers as any)?.name ?? "—"}</TableCell>
-                    <TableCell>{inv.invoice_date}</TableCell>
-                    <TableCell>{inv.due_date}</TableCell>
+                    <TableCell>{formatDisplayDate(inv.invoice_date, defaultCurrency)}</TableCell>
+                    <TableCell>{formatDisplayDate(inv.due_date, defaultCurrency)}</TableCell>
                     <TableCell>
                       <Badge className={statusColors[inv.status] ?? ""} variant="secondary">
                         {inv.status}
@@ -1049,11 +1049,11 @@ const Invoices = () => {
                       <tbody>
                         <tr>
                           <td style={{ padding: "3px 12px 3px 0", color: "#888", fontWeight: 600 }}>Invoice Date</td>
-                          <td style={{ padding: "3px 0", fontWeight: 500 }}>{previewInvoice.invoice_date}</td>
+                          <td style={{ padding: "3px 0", fontWeight: 500 }}>{formatDisplayDate(previewInvoice.invoice_date, defaultCurrency)}</td>
                         </tr>
                         <tr>
                           <td style={{ padding: "3px 12px 3px 0", color: "#888", fontWeight: 600 }}>Due Date</td>
-                          <td style={{ padding: "3px 0", fontWeight: 500 }}>{previewInvoice.due_date}</td>
+                          <td style={{ padding: "3px 0", fontWeight: 500 }}>{formatDisplayDate(previewInvoice.due_date, defaultCurrency)}</td>
                         </tr>
                         <tr>
                           <td style={{ padding: "3px 12px 3px 0", color: "#888", fontWeight: 600 }}>Status</td>

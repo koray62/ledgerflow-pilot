@@ -1,6 +1,7 @@
-import { format, startOfMonth, isSameDay } from "date-fns";
+import { startOfMonth, isSameDay } from "date-fns";
 import { CalendarIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDisplayDate } from "@/lib/utils";
+import { useTenant } from "@/hooks/useTenant";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -12,34 +13,37 @@ interface DatePickerProps {
   onDateChange: (date: Date | undefined) => void;
 }
 
-const DatePicker = ({ label, date, onDateChange }: DatePickerProps) => (
-  <div className="flex items-center gap-2">
-    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">{label}</span>
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className={cn(
-            "h-8 w-[150px] justify-start text-left text-xs font-normal",
-            !date && "text-muted-foreground"
-          )}
-        >
-          <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
-          {date ? format(date, "MMM d, yyyy") : "Pick a date"}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
-        <Calendar
-          mode="single"
-          selected={date}
-          onSelect={onDateChange}
-          initialFocus
-          className="p-3 pointer-events-auto"
-        />
-      </PopoverContent>
-    </Popover>
-  </div>
-);
+const DatePicker = ({ label, date, onDateChange }: DatePickerProps) => {
+  const { defaultCurrency } = useTenant();
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">{label}</span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn(
+              "h-8 w-[150px] justify-start text-left text-xs font-normal",
+              !date && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+            {date ? formatDisplayDate(date, defaultCurrency) : "Pick a date"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={onDateChange}
+            initialFocus
+            className="p-3 pointer-events-auto"
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+};
 
 interface Preset {
   label: string;

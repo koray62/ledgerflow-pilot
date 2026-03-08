@@ -31,7 +31,7 @@ import {
   Plus, Search, Pencil, Trash2, Upload, Loader2, Check, X, ExternalLink, CalendarIcon,
 } from "lucide-react";
 import { format, isAfter, isBefore, startOfDay } from "date-fns";
-import { cn, formatCurrency as fmtCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
+import { cn, formatCurrency as fmtCurrency, SUPPORTED_CURRENCIES, formatDisplayDate } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -614,7 +614,7 @@ export default function BankAccounts() {
                           <Button variant="outline" size="sm" className={cn("h-7 w-full justify-start text-xs font-normal gap-1", !txFilters.dateFrom && !txFilters.dateTo && "text-muted-foreground")}>
                             <CalendarIcon className="h-3 w-3 shrink-0" />
                             {txFilters.dateFrom || txFilters.dateTo
-                              ? `${txFilters.dateFrom ? format(txFilters.dateFrom, "MM/dd") : "…"} – ${txFilters.dateTo ? format(txFilters.dateTo, "MM/dd") : "…"}`
+                              ? `${txFilters.dateFrom ? formatDisplayDate(txFilters.dateFrom, defaultCurrency, "short") : "…"} – ${txFilters.dateTo ? formatDisplayDate(txFilters.dateTo, defaultCurrency, "short") : "…"}`
                               : "Date…"}
                           </Button>
                         </PopoverTrigger>

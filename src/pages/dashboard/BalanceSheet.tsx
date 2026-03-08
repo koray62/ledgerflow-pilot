@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useTenant } from "@/hooks/useTenant";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { AsOfDateFilter } from "@/components/dashboard/DateRangeFilter";
@@ -153,7 +153,7 @@ const BalanceSheet = () => {
   const isBalanced = Math.abs(totalAssets - totalLiabilitiesAndEquity) < 0.01;
 
   const displayDate = asOfDate
-    ? asOfDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    ? formatDisplayDate(asOfDate, defaultCurrency)
     : "Today";
 
   if (isLoading) {

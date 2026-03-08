@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 
 const statusConfig: Record<string, { icon: typeof CheckCircle; colorClass: string; label: string }> = {
   uploaded: { icon: Clock, colorClass: "text-muted-foreground", label: "Queued" },
@@ -445,7 +445,7 @@ const OCRUpload = ({ onEditEntry }: OCRUploadProps) => {
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-foreground">{doc.filename}</p>
                           <p className="text-xs text-muted-foreground">
-                            {doc.suggested_vendor || "—"} · {new Date(doc.created_at).toLocaleDateString()} · {fmtSize(doc.file_size)}
+                            {doc.suggested_vendor || "—"} · {formatDisplayDate(doc.created_at, defaultCurrency)} · {fmtSize(doc.file_size)}
                           </p>
                         </div>
                       </div>

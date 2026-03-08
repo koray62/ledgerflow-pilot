@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatDisplayDate } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
@@ -56,7 +57,7 @@ interface TeamMember {
 }
 
 export default function Team() {
-  const { tenantId, role: currentUserRole } = useTenant();
+  const { tenantId, role: currentUserRole, defaultCurrency } = useTenant();
   const { user } = useAuth();
   const { toast } = useToast();
   const { can } = usePermissions();
@@ -264,7 +265,7 @@ export default function Team() {
                         {m.role}
                       </Badge>
                     </TableCell>
-                    <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell>{formatDisplayDate(m.created_at, defaultCurrency)}</TableCell>
                     {canManageTeam && (
                       <TableCell>
                         {!isSelf && (

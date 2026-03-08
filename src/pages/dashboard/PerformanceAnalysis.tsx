@@ -8,7 +8,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useTenant } from "@/hooks/useTenant";
-import { formatCurrency as fmtCurrency } from "@/lib/utils";
+import { formatCurrency as fmtCurrency, formatDisplayDate } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area,
@@ -472,7 +472,7 @@ const PerformanceAnalysis = () => {
       pdf.setFontSize(9);
       pdf.setFont("helvetica", "normal");
       pdf.setTextColor(120);
-      pdf.text(`${YEARS[0]}–${YEARS[3]} · Generated ${new Date().toLocaleDateString()}`, margin, y + 4);
+      pdf.text(`${YEARS[0]}–${YEARS[3]} · Generated ${formatDisplayDate(new Date(), defaultCurrency)}`, margin, y + 4);
       pdf.setTextColor(0);
       y += 12;
 
