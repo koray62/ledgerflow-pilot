@@ -167,7 +167,7 @@ const JournalEntries = () => {
                         return (
                           <tr key={entry.id} className="border-b border-border/50 transition-colors hover:bg-muted/50 cursor-pointer" onClick={() => { setEditEntryId(entry.id); setFormOpen(true); }}>
                             <td className="py-3 font-mono text-sm text-accent">{entry.entry_number}</td>
-                            <td className="py-3 font-mono text-sm text-muted-foreground">{entry.entry_date}</td>
+                            <td className="py-3 font-mono text-sm text-muted-foreground">{formatDisplayDate(entry.entry_date, defaultCurrency)}</td>
                             <td className="py-3 text-sm font-medium text-foreground">{entry.description}</td>
                             <td className="py-3 text-right font-mono text-sm text-foreground">{fmt(totals.debit)}</td>
                             <td className="py-3 text-right font-mono text-sm text-foreground">{fmt(totals.credit)}</td>
