@@ -1,64 +1,38 @@
-## Multi-Currency Support — IMPLEMENTED
 
-### Supported Currencies
-USD, EUR, AED (UAE Dirham), TRY (Turkish Lira), SAR (Saudi Riyal)
 
-### Database Changes ✅
-- `tenants.default_currency` (text, NOT NULL, default 'USD')
-- `journal_entries.currency` (text, NOT NULL, default 'USD')
-- `invoices.currency` (text, NOT NULL, default 'USD')
-- `bank_accounts.currency` already existed
+## Plan: "Create New" Saves Current Form as a New Entry
 
-### Shared Utility (`src/lib/utils.ts`) ✅
-- `SUPPORTED_CURRENCIES` constant with code, label, symbol
-- `formatCurrency(amount, currency, options?)` using `Intl.NumberFormat`
-- `CurrencyCode` type
+**Goal**: The "Create New" button (visible when editing) should take the current form data (with any modifications the user made) and save it as a **new** journal entry, rather than resetting the form.
 
-### Tenant Context (`useTenant.tsx`) ✅
-- `defaultCurrency` exposed from tenant record
+### Approach
 
-### Settings (`DashboardSettings.tsx`) ✅
-- Default Currency dropdown in Organization section
+**File: `src/components/dashboard/JournalEntryForm.tsx`**
 
-### Form Currency Selectors ✅
-- **JournalEntryForm**: Currency dropdown, defaults to tenant currency, saves to `journal_entries.currency`
-- **Invoices**: Currency dropdown in create/edit dialog, saves to `invoices.currency`
-- **BankAccounts**: Select dropdown with all 5 currencies (replaced text input)
+1. **Add `onCreateNew` prop** to the Props interface (optional callback).
 
-### Financial Statements ✅
-All reports use `formatCurrency(amount, defaultCurrency)`:
-- Balance Sheet, Income Statement, Cash Flow, Performance Analysis, Dashboard Overview
-- Chart of Accounts, Journal Entries, OCR Upload
-- Bank account balances display in account's own currency
+2. **Add a `handleCreateNew` function** that:
+   - Runs the same validation as `handleSave`
+   - Uses the "Create new entry" branch of `handleSave` logic (lines 277-340) regardless of `isEditMode`
+   - Generates a new `entryNumber`
+   - Inserts a new `journal_entries` row + `journal_lines` with the current form data
+   - Shows a success toast ("New entry created from changes")
+   - Calls `onCreateNew` callback so the parent can update `editEntryId` to the newly created entry
 
-### Design Decision: Single-Currency Reporting
-- Financial statements report in tenant's default currency only
-- `currency` field on journal_entries/invoices is metadata for the transaction currency
-- Journal line debits/credits are always in the functional (reporting) currency
+3. **Add the button** in the footer (line ~647), visible only when `isEditMode`:
+   ```tsx
+   {isEditMode && (
+     <Button variant="outline" size="sm" onClick={handleCreateNew} disabled={saving} className="gap-2">
+       <Plus className="h-4 w-4" /> Create New
+     </Button>
+   )}
+   ```
 
-### Future Enhancements (out of scope)
-- Multi-currency FX rate table
-- Unrealized gain/loss calculations
-- Currency revaluation entries
-- Currency badge on mixed-currency views
-- Bank → Journal Entry currency validation on CSV import
+**File: `src/pages/dashboard/JournalEntries.tsx`**
 
-## Accounting Help Chatbot — IMPLEMENTED
+4. Pass `onCreateNew` to `JournalEntryForm` that receives the new entry ID and sets `editEntryId` to it (so the form now shows the newly created entry).
 
-### Overview
-Floating AI chatbot on all dashboard pages. Reads tenant currency + CoA from database, uses Gemini to provide accounting guidance tailored to the correct standards (TFRS, SOCPA, US GAAP, IFRS).
+### Summary
+- No form reset — current inputs are preserved and saved as a brand new entry
+- The original entry remains unchanged
+- After creation, the dialog stays open showing the new entry
 
-### Files
-- `supabase/functions/accounting-help/index.ts` — Edge function with dynamic system prompt
-- `src/components/dashboard/HelpChatbot.tsx` — Floating chat UI with streaming
-- `src/components/dashboard/DashboardLayout.tsx` — Integration point
-
-### Features
-- Currency → standard mapping (TRY→TFRS, SAR→SOCPA, USD→US GAAP, EUR/AED→IFRS)
-- Full CoA tree passed as context so model references real account codes
-- Tenant name, fiscal year end, and industry included in system prompt
-- Can recommend adding/editing/deleting CoA items and journal entries
-- SSE streaming with token-by-token rendering
-- Markdown rendering via react-markdown
-- Ephemeral conversation (resets on close)
-- Quick-start suggestion chips
