@@ -561,11 +561,37 @@ export default function BankAccounts() {
               <p className="text-center py-8 text-muted-foreground">No transactions for this account</p>
             ) : (
               <Table>
-                <TableHeader><TableRow>
-                  <TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Reference</TableHead><TableHead>Type</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Reconciled</TableHead><TableHead />
-                </TableRow></TableHeader>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Reference</TableHead><TableHead>Type</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Reconciled</TableHead><TableHead />
+                  </TableRow>
+                  <TableRow className="bg-muted/30">
+                    <TableHead className="py-1"><Input placeholder="Filter…" value={txFilters.date} onChange={(e) => setTxFilters((f) => ({ ...f, date: e.target.value }))} className="h-7 text-xs" /></TableHead>
+                    <TableHead className="py-1"><Input placeholder="Filter…" value={txFilters.description} onChange={(e) => setTxFilters((f) => ({ ...f, description: e.target.value }))} className="h-7 text-xs" /></TableHead>
+                    <TableHead className="py-1"><Input placeholder="Filter…" value={txFilters.reference} onChange={(e) => setTxFilters((f) => ({ ...f, reference: e.target.value }))} className="h-7 text-xs" /></TableHead>
+                    <TableHead className="py-1"><Input placeholder="Filter…" value={txFilters.type} onChange={(e) => setTxFilters((f) => ({ ...f, type: e.target.value }))} className="h-7 text-xs" /></TableHead>
+                    <TableHead className="py-1"><Input placeholder="Filter…" value={txFilters.amount} onChange={(e) => setTxFilters((f) => ({ ...f, amount: e.target.value }))} className="h-7 text-xs text-right" /></TableHead>
+                    <TableHead className="py-1"><Input placeholder="Filter…" value={txFilters.reconciled} onChange={(e) => setTxFilters((f) => ({ ...f, reconciled: e.target.value }))} className="h-7 text-xs" /></TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
-                  {transactions.map((t) => (
+                  {transactions
+                    .filter((t) => {
+                      const f = txFilters;
+                      if (f.date && !t.transaction_date.toLowerCase().includes(f.date.toLowerCase())) return false;
+                      if (f.description && !t.description.toLowerCase().includes(f.description.toLowerCase())) return false;
+                      if (f.reference && !(t.reference ?? "").toLowerCase().includes(f.reference.toLowerCase())) return false;
+                      if (f.type && !t.transaction_type.toLowerCase().includes(f.type.toLowerCase())) return false;
+                      if (f.amount && !String(t.amount).includes(f.amount)) return false;
+                      if (f.reconciled) {
+                        const rv = f.reconciled.toLowerCase();
+                        if (rv === "yes" || rv === "y" || rv === "true") { if (!t.is_reconciled) return false; }
+                        else if (rv === "no" || rv === "n" || rv === "false") { if (t.is_reconciled) return false; }
+                      }
+                      return true;
+                    })
+                    .map((t) => (
                     <TableRow key={t.id}>
                       <TableCell>{t.transaction_date}</TableCell>
                       <TableCell>{t.description}</TableCell>
