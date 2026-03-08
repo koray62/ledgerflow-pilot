@@ -155,6 +155,7 @@ export default function BankAccounts() {
   const fmt = (n: number) => fmtCurrency(n, defaultCurrency);
   const { user } = useAuth();
   const { isDateInClosedYear } = useClosedFiscalYears();
+  const { can } = usePermissions();
   const { toast } = useToast();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -550,7 +551,7 @@ export default function BankAccounts() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Search accounts…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
               </div>
-              <Button onClick={() => { resetForm(); setFormOpen(true); }}><Plus className="h-4 w-4 mr-1" />Add Account</Button>
+              {can("banking.edit") && <Button onClick={() => { resetForm(); setFormOpen(true); }}><Plus className="h-4 w-4 mr-1" />Add Account</Button>}
             </div>
 
             {accountsLoading ? (

@@ -187,6 +187,7 @@ interface ContactListProps {
 
 const ContactList = ({ type }: ContactListProps) => {
   const { tenantId } = useTenant();
+  const { can } = usePermissions();
   const queryClient = useQueryClient();
   const table = type === "vendor" ? "vendors" : "customers";
   const label = type === "vendor" ? "Vendor" : "Customer";
@@ -271,9 +272,11 @@ const ContactList = ({ type }: ContactListProps) => {
             className="pl-9 h-9 text-sm"
           />
         </div>
-        <Button size="sm" className="gap-1.5" onClick={openNew}>
-          <Plus className="h-3.5 w-3.5" /> Add {label}
-        </Button>
+        {can("contacts.edit") && (
+          <Button size="sm" className="gap-1.5" onClick={openNew}>
+            <Plus className="h-3.5 w-3.5" /> Add {label}
+          </Button>
+        )}
       </div>
 
       {isLoading ? (

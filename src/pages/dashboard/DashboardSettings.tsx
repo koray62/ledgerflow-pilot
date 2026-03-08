@@ -22,6 +22,7 @@ const MONTHS = [
 
 const DashboardSettings = () => {
   const { tenantId } = useTenant();
+  const { can } = usePermissions();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
