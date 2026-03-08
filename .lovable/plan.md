@@ -1,19 +1,45 @@
 
+## Multi-Currency Support — IMPLEMENTED
 
-## Update: Invoice Auto-Matching Status Condition
+### Supported Currencies
+USD, EUR, AED (UAE Dirham), TRY (Turkish Lira), SAR (Saudi Riyal)
 
-### Change
-In the previously approved plan for auto-matching CSV transactions to invoices, update the invoice lookup condition:
+### Database Changes ✅
+- `tenants.default_currency` (text, NOT NULL, default 'USD')
+- `journal_entries.currency` (text, NOT NULL, default 'USD')
+- `invoices.currency` (text, NOT NULL, default 'USD')
+- `bank_accounts.currency` already existed
 
-**Before:** Look up invoices where `status = 'sent'`
-**After:** Look up invoices where `status = 'sent'` OR `status = 'overdue'`
+### Shared Utility (`src/lib/utils.ts`) ✅
+- `SUPPORTED_CURRENCIES` constant with code, label, symbol
+- `formatCurrency(amount, currency, options?)` using `Intl.NumberFormat`
+- `CurrencyCode` type
 
-### Implementation Detail
+### Tenant Context (`useTenant.tsx`) ✅
+- `defaultCurrency` exposed from tenant record
 
-In `src/pages/dashboard/BankAccounts.tsx`, when implementing the `approveEntry` invoice auto-matching logic:
+### Settings (`DashboardSettings.tsx`) ✅
+- Default Currency dropdown in Organization section
 
-1. **Fetch query** — Query unpaid invoices with `.in('status', ['sent', 'overdue'])` instead of `.eq('status', 'sent')`.
-2. **Match check** — The matching logic (regex for invoice number + amount comparison) remains identical; it just operates on a wider pool of candidate invoices.
+### Form Currency Selectors ✅
+- **JournalEntryForm**: Currency dropdown, defaults to tenant currency, saves to `journal_entries.currency`
+- **Invoices**: Currency dropdown in create/edit dialog, saves to `invoices.currency`
+- **BankAccounts**: Select dropdown with all 5 currencies (replaced text input)
 
-This is a one-line filter change. Everything else in the approved plan stays the same.
+### Financial Statements ✅
+All reports use `formatCurrency(amount, defaultCurrency)`:
+- Balance Sheet, Income Statement, Cash Flow, Performance Analysis, Dashboard Overview
+- Chart of Accounts, Journal Entries, OCR Upload
+- Bank account balances display in account's own currency
 
+### Design Decision: Single-Currency Reporting
+- Financial statements report in tenant's default currency only
+- `currency` field on journal_entries/invoices is metadata for the transaction currency
+- Journal line debits/credits are always in the functional (reporting) currency
+
+### Future Enhancements (out of scope)
+- Multi-currency FX rate table
+- Unrealized gain/loss calculations
+- Currency revaluation entries
+- Currency badge on mixed-currency views
+- Bank → Journal Entry currency validation on CSV import
