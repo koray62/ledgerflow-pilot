@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,7 +13,8 @@ import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
-import { TrendingUp, TrendingDown, DollarSign, Percent, Shield, Activity } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Percent, Shield, Activity, Download, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { Database } from "@/integrations/supabase/types";
 
 type AccountType = Database["public"]["Enums"]["account_type"];
