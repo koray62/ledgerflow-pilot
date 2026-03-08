@@ -111,6 +111,7 @@ const JournalEntries = () => {
           }
         }}
         editEntryId={editEntryId}
+        onCreateNew={(newId) => setEditEntryId(newId)}
       />
 
       <Tabs defaultValue="manual" className="space-y-4">

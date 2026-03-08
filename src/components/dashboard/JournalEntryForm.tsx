@@ -36,9 +36,10 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editEntryId?: string | null;
+  onCreateNew?: (newEntryId: string) => void;
 }
 
-const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
+const JournalEntryForm = ({ open, onOpenChange, editEntryId, onCreateNew }: Props) => {
   const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -357,6 +358,63 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
     }
   }, [tenantId, user, entryDate, description, memo, isRecurring, recurrenceInterval, lines, queryClient, onOpenChange, isEditMode, editEntryId]);
 
+  const handleCreateNew = useCallback(async () => {
+    const validationErrors = validate();
+    setErrors(validationErrors);
+    if (validationErrors.length > 0) return;
+    if (!tenantId || !user) return;
+
+    setSaving(true);
+    try {
+      const entryNumber = `JE-${Date.now().toString(36).toUpperCase()}`;
+
+      const { data: je, error: jeErr } = await supabase
+        .from("journal_entries")
+        .insert({
+          tenant_id: tenantId,
+          entry_number: entryNumber,
+          entry_date: entryDate,
+          description: description.trim(),
+          memo: memo.trim() || null,
+          currency,
+          status: "draft",
+          created_by: user.id,
+        } as any)
+        .select("id")
+        .single();
+
+      if (jeErr || !je) throw jeErr || new Error("Failed to create entry");
+
+      const lineRows = lines
+        .filter((l) => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
+        .map((l) => ({
+          tenant_id: tenantId,
+          journal_entry_id: je.id,
+          account_id: l.accountId,
+          debit: parseFloat(l.debit) || 0,
+          credit: parseFloat(l.credit) || 0,
+          description: l.description.trim() || null,
+        }));
+
+      const { error: linesErr } = await supabase
+        .from("journal_lines")
+        .insert(lineRows);
+
+      if (linesErr) throw linesErr;
+
+      queryClient.invalidateQueries({ queryKey: ["journal-entries", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["journal-line-totals", tenantId] });
+
+      toast({ title: "New entry created", description: `Journal entry ${entryNumber} created from current data.` });
+      onCreateNew?.(je.id);
+    } catch (err: any) {
+      console.error("Create new JE error:", err);
+      toast({ title: "Save failed", description: err.message || "Something went wrong.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }, [tenantId, user, entryDate, description, memo, lines, currency, queryClient, onCreateNew]);
+
   const fmt = (n: number) => formatCurrency(n, defaultCurrency);
 
   // Group accounts by type
@@ -645,6 +703,11 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
 
             {/* Actions */}
             <div className="flex justify-end gap-2 pt-2">
+              {isEditMode && onCreateNew && (
+                <Button variant="outline" size="sm" onClick={handleCreateNew} disabled={saving} className="gap-2 mr-auto">
+                  <Plus className="h-4 w-4" /> Create New
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
                 Cancel
               </Button>
