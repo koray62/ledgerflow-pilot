@@ -1,25 +1,26 @@
 
 
-## Problem
+## Plan: Add "Full Year" Preset to Income Statement (Compare Mode Only)
 
-In the "Review & Approve Journal Entries" table, the Amount column shows plain numbers (e.g., `50000`, `4.22`, `308.3`) without any sign indicator. Since journal entries always use absolute amounts (debit/credit accounts indicate direction), users can't tell at a glance whether the original transaction was an inflow or outflow.
+### What
 
-## Solution
+Add a "Full Year" shortcut button in the Income Statement filter area that:
+- Only appears when the Compare toggle is enabled
+- Sets the date range to Jan 1 – Dec 31 for previous years, and Jan 1 – today (YTD) for the current year
 
-Enhance the Amount column in the suggestions review table to clearly indicate the direction of the original transaction:
+### How
 
-1. **Color coding**: Green for inflows (credits/positive original amounts), red for outflows (debits/negative original amounts)
-2. **Prefix indicators**: Show `▲` or `+` for inflows and `▼` or `−` for outflows next to the amount
-3. **Apply to both states**: The pending (editable input) and approved (read-only span) views should both show the direction indicator
+**File: `src/pages/dashboard/IncomeStatement.tsx`**
 
-### Technical approach
+1. Add a "Full Year" button next to the Compare toggle (or near the date presets), conditionally rendered only when `compareEnabled` is `true`.
+2. On click, set `startDate` to Jan 1 of the current year and `endDate` to Dec 31 of the current year.
+3. Update the comparison date computation logic: for past years, use full Jan 1 – Dec 31 ranges. For the current year, the existing `endDate` will naturally be Dec 31, but since comparison years are computed via `subYears`, they will automatically span full years.
 
-- Each suggestion object already has `originalTx.amount` which preserves the sign from the CSV. Use this to determine direction.
-- For the **read-only** display: format with color + arrow prefix based on `originalTx.amount` sign
-- For the **editable input**: add a colored badge/label next to the input showing the direction (e.g., a small "IN" or "OUT" badge), since the input itself shows the absolute journal amount
-- Apply similar treatment to the raw transaction preview table (line ~547) which already has color but could benefit from clearer `+`/`-` prefixes
+The key insight: setting end date to Dec 31 of the current year means the current year shows full-year data (or whatever is available up to that date since future entries won't exist), while `subYears` on those dates gives full Jan 1 – Dec 31 for prior years automatically.
 
-### Files to change
+**File: `src/pages/dashboard/IncomeStatement.tsx` changes:**
+- Add a `Button` with label "Full Year" after the Compare switch, visible only when `compareEnabled` is true
+- On click: `setStartDate(new Date(currentYear, 0, 1))` and `setEndDate(new Date(currentYear, 11, 31))`
 
-- `src/pages/dashboard/BankAccounts.tsx` — Update the Amount cells in both the transaction preview table and the journal entry review table to include direction indicators and consistent color coding
+This is a small, self-contained change — roughly 10-12 lines added.
 
