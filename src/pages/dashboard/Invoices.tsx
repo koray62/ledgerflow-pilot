@@ -20,7 +20,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Trash2, Eye, CreditCard, Printer, BookOpen } from "lucide-react";
+import { Plus, Search, Trash2, Eye, CreditCard, Printer, BookOpen, XCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import html2canvas from "html2canvas";
@@ -498,6 +498,33 @@ const Invoices = () => {
     }
   };
 
+  /* ─── cancel invoice ─── */
+  const handleCancelInvoice = async (invoiceId: string) => {
+    const inv = invoices.find((i) => i.id === invoiceId);
+    if (!inv || !tenantId || !user) return;
+    setSaving(true);
+    try {
+      if (inv.journal_entry_id) {
+        await supabase
+          .from("journal_entries")
+          .update({ status: "voided" } as any)
+          .eq("id", inv.journal_entry_id);
+      }
+      await supabase
+        .from("invoices")
+        .update({ status: "cancelled" } as any)
+        .eq("id", invoiceId);
+
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["journal_entries"] });
+      toast({ title: "Invoice cancelled", description: `Invoice ${inv.invoice_number} cancelled and journal entry voided.` });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   /* ─── PDF export ─── */
   const exportPdf = async () => {
     if (!previewRef.current) return;
@@ -645,6 +672,17 @@ const Invoices = () => {
                           title="Record Payment"
                         >
                           <CreditCard className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {(inv.status === "sent" || inv.status === "overdue") && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleCancelInvoice(inv.id)}
+                          title="Cancel Invoice"
+                          disabled={saving}
+                        >
+                          <XCircle className="h-4 w-4 text-destructive" />
                         </Button>
                       )}
                       {inv.status === "draft" && (
