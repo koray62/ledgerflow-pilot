@@ -89,6 +89,9 @@ const computeBalances = (
   return map;
 };
 
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS_LIST = [CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR];
+
 const IncomeStatement = () => {
   const { tenantId } = useTenant();
   const [startDate, setStartDate] = useState<Date | undefined>(startOfYear(new Date()));
@@ -250,13 +253,27 @@ const IncomeStatement = () => {
           <h1 className="text-2xl font-bold text-foreground">Income Statement</h1>
           <p className="text-sm text-muted-foreground">{subtitle} · Posted entries only</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <DateRangeFilter
             startDate={startDate}
             endDate={endDate}
             onStartDateChange={setStartDate}
             onEndDateChange={setEndDate}
           />
+          {YEARS_LIST.map((yr) => (
+            <Button
+              key={yr}
+              variant={startDate?.getFullYear() === yr && endDate?.getFullYear() === yr && startDate.getMonth() === 0 && startDate.getDate() === 1 && endDate.getMonth() === 11 && endDate.getDate() === 31 ? "secondary" : "outline"}
+              size="sm"
+              className="text-xs"
+              onClick={() => {
+                setStartDate(new Date(yr, 0, 1));
+                setEndDate(new Date(yr, 11, 31));
+              }}
+            >
+              {yr}
+            </Button>
+          ))}
           <Button
             variant="ghost"
             size="sm"
