@@ -43,6 +43,36 @@ All reports use `formatCurrency(amount, defaultCurrency)`:
 - Currency badge on mixed-currency views
 - Bank → Journal Entry currency validation on CSV import
 
+## Dual-Mode Accounting (Cash vs Accrual Basis) — IMPLEMENTED
+
+### Overview
+Users can choose between Cash Basis and Accrual Basis accounting. The setting affects how the Income Statement and Cash Flow reports calculate and display data.
+
+### Database Changes ✅
+- `tenants.accounting_basis` (text, NOT NULL, default 'accrual')
+
+### Tenant Context (`useTenant.tsx`) ✅
+- `accountingBasis` exposed from tenant record
+
+### Settings (`DashboardSettings.tsx`) ✅
+- Accounting Method RadioGroup with descriptions for each basis
+
+### Income Statement (`IncomeStatement.tsx`) ✅
+- **Accrual Mode**: Standard journal entry date filtering, all revenue/expense accounts
+- **Cash Mode**: Only considers journal entries touching cash accounts (1000 descendants), attributes amounts to counter-party revenue/expense accounts, excludes AR (1100) and Deferred Revenue (2200) from display
+- Basis badge displayed in header
+
+### Cash Flow (`CashFlow.tsx`) ✅
+- **Accrual Mode (Indirect Method)**: Starts with Net Income, adjusts for ΔAR and ΔDeferred Revenue, shows reconciliation table
+- **Cash Mode**: Simplified direct cash movements, hides AR/AP adjustment sections and outstanding invoices/bills projections
+- Basis badge displayed in header
+- Metrics cards change based on mode
+
+### Key Validation Rules
+- Cash Basis P&L never shows AR or Deferred Revenue balances
+- Accrual Basis uses journal entry date for filtering
+- Cash Basis uses cash-account-touching entries only
+
 ## Accounting Help Chatbot — IMPLEMENTED
 
 ### Overview
