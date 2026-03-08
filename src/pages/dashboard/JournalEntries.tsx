@@ -35,7 +35,7 @@ const JournalEntries = () => {
     if (editId) {
       setEditEntryId(editId);
       setFormOpen(true);
-      if (from === "coa") returnTo.current = "/dashboard/chart-of-accounts";
+      if (from === "coa") returnTo.current = "/dashboard/accounts";
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
