@@ -461,7 +461,23 @@ export default function BankAccounts() {
         tenant_id: tenantId,
       } as TablesInsert<"bank_transactions">);
 
-      setSuggestions((prev) => prev.map((item, i) => i === idx ? { ...item, status: "approved" } : item));
+      setSuggestions((prev) => {
+        const updated = prev.map((item, i) => i === idx ? { ...item, status: "approved" as const } : item);
+        // Auto-clear when all entries are approved
+        if (updated.every((item) => item.status === "approved" || item.status === "skipped")) {
+          setTimeout(() => {
+            setSuggestions([]);
+            setParsedTxs([]);
+            if (importAccountId) {
+              const cache = readCache();
+              delete cache[importAccountId];
+              writeCache(cache);
+            }
+            toast({ title: "All entries processed", description: "The review table has been cleared." });
+          }, 1500);
+        }
+        return updated;
+      });
       toast({ title: `Entry ${s.reference} approved` });
       qc.invalidateQueries({ queryKey: ["bank_transactions"] });
       qc.invalidateQueries({ queryKey: ["journal_entries"] });
