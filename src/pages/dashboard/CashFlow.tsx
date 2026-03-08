@@ -165,19 +165,24 @@ const CashFlow = () => {
   const runway = monthlyBurn > 0 ? netCashPosition / monthlyBurn : null;
   const showWarning = runway !== null && runway < 6;
 
-  // Build 12-month forecast starting from current date, with opening balance point
+  // Build monthly forecast based on selected date range (or default 12 months from now)
   const chartData = (() => {
-    const now = new Date();
+    const rangeStart = startDate ?? new Date();
+    const rangeEnd = endDate ?? new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 12, 0);
+    const firstMonth = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+    const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
+
     const months: { month: string; label: string; start: Date; end: Date }[] = [];
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      const end = new Date(now.getFullYear(), now.getMonth() + i + 1, 0);
+    const cursor = new Date(firstMonth);
+    while (cursor <= lastMonth) {
+      const end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
       months.push({
-        month: d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
-        label: d.toLocaleDateString("en-US", { month: "short" }),
-        start: d,
+        month: cursor.toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
+        label: cursor.toLocaleDateString("en-US", { month: "short" }),
+        start: new Date(cursor),
         end,
       });
+      cursor.setMonth(cursor.getMonth() + 1);
     }
 
     // Opening balance data point
@@ -292,7 +297,7 @@ const CashFlow = () => {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">12-Month Cash Flow Forecast</CardTitle>
+          <CardTitle className="text-base">Cash Flow Forecast</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
