@@ -472,6 +472,14 @@ export default function BankAccounts() {
     }
   }, [suggestions, tenantId, importAccountId, user, toast, qc]);
 
+  const updateSuggestion = (idx: number, field: keyof AISuggestion, value: any) => {
+    setSuggestions((prev) => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
+  };
+
+  const filtered = accounts.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()) || (a.institution ?? "").toLowerCase().includes(search.toLowerCase()));
+
+  const accountName = (id: string) => chartAccounts.find((a) => a.id === id)?.name ?? "Unknown";
+
   const isReviewVisible = useCallback((s: AISuggestion) => {
     const f = reviewFilters;
     const low = (v: string) => v.toLowerCase();
@@ -494,14 +502,6 @@ export default function BankAccounts() {
     }
     setBulkApproving(false);
   };
-
-  const updateSuggestion = (idx: number, field: keyof AISuggestion, value: any) => {
-    setSuggestions((prev) => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
-  };
-
-  const filtered = accounts.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()) || (a.institution ?? "").toLowerCase().includes(search.toLowerCase()));
-
-  const accountName = (id: string) => chartAccounts.find((a) => a.id === id)?.name ?? "Unknown";
 
   /* ─── RENDER ─── */
   return (
