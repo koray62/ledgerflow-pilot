@@ -1,4 +1,3 @@
-
 ## Multi-Currency Support — IMPLEMENTED
 
 ### Supported Currencies
@@ -43,3 +42,23 @@ All reports use `formatCurrency(amount, defaultCurrency)`:
 - Currency revaluation entries
 - Currency badge on mixed-currency views
 - Bank → Journal Entry currency validation on CSV import
+
+## Accounting Help Chatbot — IMPLEMENTED
+
+### Overview
+Floating AI chatbot on all dashboard pages. Reads tenant currency + CoA from database, uses Gemini to provide accounting guidance tailored to the correct standards (TFRS, SOCPA, US GAAP, IFRS).
+
+### Files
+- `supabase/functions/accounting-help/index.ts` — Edge function with dynamic system prompt
+- `src/components/dashboard/HelpChatbot.tsx` — Floating chat UI with streaming
+- `src/components/dashboard/DashboardLayout.tsx` — Integration point
+
+### Features
+- Currency → standard mapping (TRY→TFRS, SAR→SOCPA, USD→US GAAP, EUR/AED→IFRS)
+- Full CoA tree passed as context so model references real account codes
+- Tenant name, fiscal year end, and industry included in system prompt
+- Can recommend adding/editing/deleting CoA items and journal entries
+- SSE streaming with token-by-token rendering
+- Markdown rendering via react-markdown
+- Ephemeral conversation (resets on close)
+- Quick-start suggestion chips
