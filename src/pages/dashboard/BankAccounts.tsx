@@ -751,8 +751,8 @@ export default function BankAccounts() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <p className="font-medium">Review & Approve Journal Entries</p>
-                      <Button onClick={approveAll} disabled={bulkApproving || !suggestions.some((s) => s.status === "pending")}>
-                        {bulkApproving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Approving…</> : "Approve All Pending"}
+                      <Button onClick={approveAll} disabled={bulkApproving || !suggestions.some((s) => s.status === "pending" && isReviewVisible(s))}>
+                        {bulkApproving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Approving…</> : "Approve All Filtered"}
                       </Button>
                     </div>
                     <div className="overflow-x-auto">
