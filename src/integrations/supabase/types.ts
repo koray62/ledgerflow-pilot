@@ -1040,6 +1040,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          accounting_basis: string
           address: string | null
           created_at: string
           default_currency: string
@@ -1054,6 +1055,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          accounting_basis?: string
           address?: string | null
           created_at?: string
           default_currency?: string
@@ -1068,6 +1070,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          accounting_basis?: string
           address?: string | null
           created_at?: string
           default_currency?: string
