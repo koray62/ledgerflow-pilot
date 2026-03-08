@@ -20,7 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
 
 type AccountType = Database["public"]["Enums"]["account_type"];
