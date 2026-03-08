@@ -274,7 +274,14 @@ const IncomeStatement = () => {
             <Switch
               id="compare-toggle"
               checked={compareEnabled}
-              onCheckedChange={setCompareEnabled}
+              onCheckedChange={(checked) => {
+                setCompareEnabled(checked);
+                if (checked) {
+                  const yr = new Date().getFullYear();
+                  setStartDate(new Date(yr, 0, 1));
+                  setEndDate(new Date(yr, 11, 31));
+                }
+              }}
             />
             <Label htmlFor="compare-toggle" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
               Compare
