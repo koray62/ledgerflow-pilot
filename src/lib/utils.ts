@@ -15,16 +15,27 @@ export const SUPPORTED_CURRENCIES = [
 
 export type CurrencyCode = (typeof SUPPORTED_CURRENCIES)[number]["code"];
 
+// Map common non-standard codes to valid ISO 4217 codes
+const CURRENCY_ALIAS: Record<string, string> = {
+  TL: "TRY",
+};
+
 export const formatCurrency = (
   amount: number,
   currency: string = "USD",
   options?: { maximumFractionDigits?: number; minimumFractionDigits?: number; abs?: boolean }
 ) => {
   const value = options?.abs ? Math.abs(amount) : amount;
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: options?.maximumFractionDigits,
-    minimumFractionDigits: options?.minimumFractionDigits,
-  }).format(value);
+  const code = CURRENCY_ALIAS[currency] ?? currency;
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: code,
+      maximumFractionDigits: options?.maximumFractionDigits,
+      minimumFractionDigits: options?.minimumFractionDigits,
+    }).format(value);
+  } catch {
+    // Fallback for any unrecognised currency code
+    return `${code} ${value.toFixed(2)}`;
+  }
 };
