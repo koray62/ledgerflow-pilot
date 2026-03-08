@@ -961,7 +961,7 @@ const Invoices = () => {
                     <img
                       src={tenantLogoUrl}
                       alt="Company Logo"
-                      style={{ width: "180px", height: "180px", objectFit: "contain", borderRadius: "6px" }}
+                      style={{ maxWidth: "180px", maxHeight: "180px", objectFit: "contain", borderRadius: "6px" }}
                       crossOrigin="anonymous"
                     />
                   </div>
@@ -987,32 +987,6 @@ const Invoices = () => {
                     <p style={{ margin: "4px 0 0", fontSize: "11pt", fontWeight: 600, color: "#333" }}>
                       {previewInvoice.invoice_number}
                     </p>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        marginTop: "6px",
-                        padding: "2px 10px",
-                        borderRadius: "4px",
-                        fontSize: "8pt",
-                        fontWeight: 600,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                        backgroundColor:
-                          previewInvoice.status === "paid"
-                            ? "#d1fae5"
-                            : previewInvoice.status === "sent"
-                            ? "#dbeafe"
-                            : "#f3f4f6",
-                        color:
-                          previewInvoice.status === "paid"
-                            ? "#065f46"
-                            : previewInvoice.status === "sent"
-                            ? "#1e40af"
-                            : "#374151",
-                      }}
-                    >
-                      {previewInvoice.status}
-                    </span>
                   </div>
                 </div>
 
@@ -1056,12 +1030,6 @@ const Invoices = () => {
                         <tr>
                           <td style={{ padding: "3px 12px 3px 0", color: "#888", fontWeight: 600 }}>Due Date</td>
                           <td style={{ padding: "3px 0", fontWeight: 500 }}>{formatDisplayDate(previewInvoice.due_date, defaultCurrency)}</td>
-                        </tr>
-                        <tr>
-                          <td style={{ padding: "3px 12px 3px 0", color: "#888", fontWeight: 600 }}>Status</td>
-                          <td style={{ padding: "3px 0", fontWeight: 500, textTransform: "capitalize" }}>
-                            {previewInvoice.status}
-                          </td>
                         </tr>
                       </tbody>
                     </table>
