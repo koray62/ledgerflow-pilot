@@ -12,7 +12,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
 
 interface JournalLine {
   id?: string;
@@ -48,6 +48,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceInterval, setRecurrenceInterval] = useState("monthly");
   const [lines, setLines] = useState<JournalLine[]>([emptyLine(), emptyLine()]);
+  const [currency, setCurrency] = useState(defaultCurrency);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loadingEntry, setLoadingEntry] = useState(false);
@@ -112,7 +113,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
         const [entryRes, linesRes] = await Promise.all([
           supabase
             .from("journal_entries")
-            .select("entry_date, description, memo, status")
+            .select("entry_date, description, memo, status, currency")
             .eq("id", editEntryId)
             .eq("tenant_id", tenantId)
             .single(),
@@ -128,6 +129,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
           setEntryDate(entryRes.data.entry_date);
           setDescription(entryRes.data.description);
           setMemo(entryRes.data.memo || "");
+          setCurrency((entryRes.data as any).currency || defaultCurrency);
         }
 
         if (linesRes.data && linesRes.data.length > 0) {
@@ -163,6 +165,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
       setContactId("");
       setIsRecurring(false);
       setRecurrenceInterval("monthly");
+      setCurrency(defaultCurrency);
       setEntryDate(new Date().toISOString().split("T")[0]);
       setLines([emptyLine(), emptyLine()]);
       setErrors([]);
@@ -228,7 +231,8 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
             entry_date: entryDate,
             description: description.trim(),
             memo: memo.trim() || null,
-          })
+            currency,
+          } as any)
           .eq("id", editEntryId)
           .eq("tenant_id", tenantId);
 
@@ -275,9 +279,10 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
             entry_date: entryDate,
             description: description.trim(),
             memo: memo.trim() || null,
+            currency,
             status: "draft",
             created_by: user.id,
-          })
+          } as any)
           .select("id")
           .single();
 
