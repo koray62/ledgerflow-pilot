@@ -61,7 +61,7 @@ const TAX_RATE = 0.2;
 
 /* ═══════════════════════════ COMPONENT ═══════════════════════════ */
 const Invoices = () => {
-  const { tenantId, defaultCurrency } = useTenant();
+  const { tenantId, defaultCurrency, accountingBasis } = useTenant();
   const { user } = useAuth();
   const { isDateInClosedYear } = useClosedFiscalYears();
   const { can } = usePermissions();
