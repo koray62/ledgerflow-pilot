@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,8 @@ import { Plus, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,6 +25,7 @@ const statusColors: Record<string, string> = {
 const JournalEntries = () => {
   const { tenantId, defaultCurrency } = useTenant();
   const { can } = usePermissions();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
@@ -112,6 +114,22 @@ const JournalEntries = () => {
         }}
         editEntryId={editEntryId}
         onCreateNew={(newId) => setEditEntryId(newId)}
+        canDelete={can("journal_entries.delete")}
+        onDelete={async (entryId) => {
+          try {
+            // Delete lines first, then the entry
+            await supabase.from("journal_lines").delete().eq("journal_entry_id", entryId).eq("tenant_id", tenantId!);
+            const { error } = await supabase.from("journal_entries").delete().eq("id", entryId).eq("tenant_id", tenantId!);
+            if (error) throw error;
+            queryClient.invalidateQueries({ queryKey: ["journal-entries", tenantId] });
+            queryClient.invalidateQueries({ queryKey: ["journal-line-totals", tenantId] });
+            toast({ title: "Entry deleted", description: "Journal entry has been permanently deleted." });
+            setEditEntryId(null);
+            setFormOpen(false);
+          } catch (err: any) {
+            toast({ title: "Delete failed", description: err.message || "Something went wrong.", variant: "destructive" });
+          }
+        }}
       />
 
       <Tabs defaultValue="manual" className="space-y-4">

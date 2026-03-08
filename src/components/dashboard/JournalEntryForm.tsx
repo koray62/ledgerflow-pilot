@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Plus, Trash2, Loader2, AlertCircle, RefreshCw, CalendarIcon } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
@@ -37,9 +38,11 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   editEntryId?: string | null;
   onCreateNew?: (newEntryId: string) => void;
+  onDelete?: (entryId: string) => void;
+  canDelete?: boolean;
 }
 
-const JournalEntryForm = ({ open, onOpenChange, editEntryId, onCreateNew }: Props) => {
+const JournalEntryForm = ({ open, onOpenChange, editEntryId, onCreateNew, onDelete, canDelete }: Props) => {
   const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -702,12 +705,36 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId, onCreateNew }: Prop
             )}
 
             {/* Actions */}
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex gap-2 pt-2">
+              {isEditMode && canDelete && onDelete && editEntryId && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" disabled={saving} className="gap-2">
+                      <Trash2 className="h-4 w-4" /> Delete
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Journal Entry</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete this journal entry and all its lines. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => onDelete(editEntryId)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
               {isEditMode && onCreateNew && (
-                <Button variant="outline" size="sm" onClick={handleCreateNew} disabled={saving} className="gap-2 mr-auto">
+                <Button variant="outline" size="sm" onClick={handleCreateNew} disabled={saving} className="gap-2">
                   <Plus className="h-4 w-4" /> Create New
                 </Button>
               )}
+              <div className="flex-1" />
               <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
                 Cancel
               </Button>
