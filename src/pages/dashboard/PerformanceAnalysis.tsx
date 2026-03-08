@@ -207,7 +207,7 @@ const PerformanceAnalysis = () => {
     const expenseAccIds = new Set(accounts.filter((a) => a.account_type === "expense").map((a) => a.id));
 
     const results: YearlyData[] = YEARS.map((year, idx) => {
-      const lines = yearQueries[idx].data ?? [];
+      const lines = allYearLines[year] ?? [];
 
       let revenue = 0;
       let expenses = 0;
@@ -260,7 +260,7 @@ const PerformanceAnalysis = () => {
     }
 
     return results;
-  }, [isLoading, accounts, yearQueries, cashBalance, arData, apData]);
+  }, [isLoading, accounts, allYearLines, cashBalance, arData, apData]);
 
   // Monthly drill-down data
   const monthlyData = useMemo(() => {
