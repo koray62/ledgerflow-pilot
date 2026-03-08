@@ -36,7 +36,7 @@ export const usePermissions = () => {
         .from("tenant_permissions")
         .select("permission_key, allowed")
         .eq("tenant_id", tenantId!)
-        .eq("role", role!);
+        .eq("role", role! as any);
       if (error) throw error;
       return (data ?? []) as PermissionRow[];
     },
