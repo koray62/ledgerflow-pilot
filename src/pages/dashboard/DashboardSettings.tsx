@@ -304,6 +304,241 @@ const DashboardSettings = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Year-End Closing */}
+        <Card>
+          <CardContent className="p-6">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Lock className="h-4 w-4" /> Close Fiscal Year
+            </h3>
+            <Separator className="my-4" />
+            <p className="text-xs text-muted-foreground mb-4">
+              Create a closing journal entry that zeros out all revenue and expense accounts, transferring the net income/loss to Retained Earnings (3200).
+            </p>
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <Label className="text-xs">Fiscal Year</Label>
+                <Select value={selectedFY} onValueChange={setSelectedFY}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select year…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      const currentYear = new Date().getFullYear();
+                      const years: number[] = [];
+                      for (let y = currentYear; y >= currentYear - 5; y--) years.push(y);
+                      return years.map((y) => (
+                        <SelectItem key={y} value={String(y)}>FY {y}</SelectItem>
+                      ));
+                    })()}
+                  </SelectContent>
+                </Select>
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="hero" size="sm" disabled={closingYear || !selectedFY}>
+                    {closingYear && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {closingYear ? "Closing…" : "Close Year"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Close FY {selectedFY}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will create a posted closing journal entry that zeros out all revenue and expense accounts for FY {selectedFY} and transfers the balance to Retained Earnings. This action cannot be easily undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        if (!tenantId || !selectedFY) return;
+                        setClosingYear(true);
+                        try {
+                          const fy = parseInt(selectedFY, 10);
+                          const fyeMonth = parseInt(fiscalYearEnd, 10);
+
+                          // Calculate fiscal year date range
+                          let startDate: string, endDate: string;
+                          if (fyeMonth === 12) {
+                            startDate = `${fy}-01-01`;
+                            endDate = `${fy}-12-31`;
+                          } else {
+                            startDate = `${fy - 1}-${String(fyeMonth + 1).padStart(2, "0")}-01`;
+                            const endMonth = fyeMonth;
+                            const endYear = fy;
+                            const lastDay = new Date(endYear, endMonth, 0).getDate();
+                            endDate = `${endYear}-${String(endMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+                          }
+
+                          // Check for duplicate
+                          const closingDesc = `Year-End Closing — FY ${fy}`;
+                          const { data: existing } = await supabase
+                            .from("journal_entries")
+                            .select("id")
+                            .eq("tenant_id", tenantId)
+                            .eq("description", closingDesc)
+                            .is("deleted_at", null)
+                            .limit(1);
+                          if (existing && existing.length > 0) {
+                            toast({ title: "Already closed", description: `FY ${fy} has already been closed.`, variant: "destructive" });
+                            return;
+                          }
+
+                          // Get revenue & expense accounts
+                          const { data: accounts } = await supabase
+                            .from("chart_of_accounts")
+                            .select("id, code, name, account_type")
+                            .eq("tenant_id", tenantId)
+                            .is("deleted_at", null)
+                            .in("account_type", ["revenue", "expense"]);
+                          if (!accounts || accounts.length === 0) {
+                            toast({ title: "No accounts", description: "No revenue or expense accounts found.", variant: "destructive" });
+                            return;
+                          }
+
+                          // Get Retained Earnings account (3200)
+                          const { data: reAccounts } = await supabase
+                            .from("chart_of_accounts")
+                            .select("id")
+                            .eq("tenant_id", tenantId)
+                            .eq("code", "3200")
+                            .is("deleted_at", null)
+                            .limit(1);
+                          if (!reAccounts || reAccounts.length === 0) {
+                            toast({ title: "Missing account", description: "Retained Earnings account (3200) not found. Please create it first.", variant: "destructive" });
+                            return;
+                          }
+                          const retainedEarningsId = reAccounts[0].id;
+
+                          // Fetch balances for fiscal year period
+                          const { data: lines } = await supabase
+                            .from("journal_lines")
+                            .select("account_id, debit, credit, journal_entry_id")
+                            .eq("tenant_id", tenantId)
+                            .is("deleted_at", null);
+
+                          // Get posted entries in period
+                          const { data: entries } = await supabase
+                            .from("journal_entries")
+                            .select("id, entry_date, status")
+                            .eq("tenant_id", tenantId)
+                            .eq("status", "posted")
+                            .is("deleted_at", null)
+                            .gte("entry_date", startDate)
+                            .lte("entry_date", endDate);
+
+                          const validEntryIds = new Set((entries ?? []).map((e) => e.id));
+                          const accountBalances = new Map<string, number>();
+                          for (const line of lines ?? []) {
+                            if (!validEntryIds.has(line.journal_entry_id)) continue;
+                            const prev = accountBalances.get(line.account_id) ?? 0;
+                            accountBalances.set(line.account_id, prev + (line.debit - line.credit));
+                          }
+
+                          // Build closing lines
+                          const closingLines: { account_id: string; debit: number; credit: number; description: string }[] = [];
+                          let netIncome = 0;
+
+                          for (const acct of accounts) {
+                            const balance = accountBalances.get(acct.id) ?? 0;
+                            if (Math.abs(balance) < 0.005) continue;
+
+                            if (acct.account_type === "revenue") {
+                              // Revenue has credit-normal balance (negative debit balance means credit balance)
+                              // To zero: debit the account
+                              closingLines.push({
+                                account_id: acct.id,
+                                debit: balance < 0 ? Math.abs(balance) : 0,
+                                credit: balance > 0 ? balance : 0,
+                                description: `Close ${acct.code} ${acct.name}`,
+                              });
+                              netIncome += -balance; // credit balance = positive net income
+                            } else {
+                              // Expense has debit-normal balance (positive = debit balance)
+                              // To zero: credit the account
+                              closingLines.push({
+                                account_id: acct.id,
+                                debit: balance < 0 ? Math.abs(balance) : 0,
+                                credit: balance > 0 ? balance : 0,
+                                description: `Close ${acct.code} ${acct.name}`,
+                              });
+                              netIncome -= balance; // debit balance = reduces net income
+                            }
+                          }
+
+                          if (closingLines.length === 0) {
+                            toast({ title: "Nothing to close", description: "All revenue/expense accounts have zero balance for this period." });
+                            return;
+                          }
+
+                          // Add Retained Earnings line
+                          if (netIncome > 0) {
+                            closingLines.push({ account_id: retainedEarningsId, debit: 0, credit: netIncome, description: "Net income to Retained Earnings" });
+                          } else if (netIncome < 0) {
+                            closingLines.push({ account_id: retainedEarningsId, debit: Math.abs(netIncome), credit: 0, description: "Net loss to Retained Earnings" });
+                          }
+
+                          // Create entry number
+                          const { count } = await supabase
+                            .from("journal_entries")
+                            .select("id", { count: "exact", head: true })
+                            .eq("tenant_id", tenantId);
+                          const entryNumber = `JE-${String((count ?? 0) + 1).padStart(5, "0")}`;
+
+                          // Insert journal entry
+                          const { data: newEntry, error: entryErr } = await supabase
+                            .from("journal_entries")
+                            .insert({
+                              tenant_id: tenantId,
+                              entry_number: entryNumber,
+                              entry_date: endDate,
+                              description: closingDesc,
+                              memo: `Fiscal year ${fy} closing entry`,
+                              status: "posted",
+                              posted_at: new Date().toISOString(),
+                            })
+                            .select("id")
+                            .single();
+                          if (entryErr) throw entryErr;
+
+                          // Insert journal lines
+                          const { error: linesErr } = await supabase
+                            .from("journal_lines")
+                            .insert(
+                              closingLines.map((l) => ({
+                                tenant_id: tenantId,
+                                journal_entry_id: newEntry.id,
+                                account_id: l.account_id,
+                                debit: l.debit,
+                                credit: l.credit,
+                                description: l.description,
+                              }))
+                            );
+                          if (linesErr) throw linesErr;
+
+                          toast({
+                            title: "Fiscal year closed",
+                            description: `Created closing entry ${entryNumber} with ${closingLines.length} lines. Net income: ${netIncome >= 0 ? "+" : ""}${netIncome.toFixed(2)}`,
+                          });
+                          queryClient.invalidateQueries({ queryKey: ["journal"] });
+                          queryClient.invalidateQueries({ queryKey: ["journal-entries"] });
+                        } catch (err: any) {
+                          toast({ title: "Error", description: err.message, variant: "destructive" });
+                        } finally {
+                          setClosingYear(false);
+                        }
+                      }}
+                    >
+                      Yes, close FY {selectedFY}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="border-destructive/30">
           <CardContent className="p-6">
             <h3 className="text-sm font-semibold text-destructive flex items-center gap-2">
