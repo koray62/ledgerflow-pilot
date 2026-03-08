@@ -3,7 +3,7 @@ import { format, subDays } from "date-fns";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer
 } from "recharts";
 import { AlertTriangle, TrendingUp, DollarSign, Clock, RotateCcw } from "lucide-react";
@@ -339,10 +339,11 @@ const CashFlow = () => {
             <Skeleton className="h-[360px] w-full rounded-lg" />
           ) : (
             <ResponsiveContainer width="100%" height={360}>
-              <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+              <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis domain={['dataMin', 'dataMax']} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                <YAxis yAxisId="left" domain={['dataMin', 'dataMax']} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                <YAxis yAxisId="right" orientation="right" domain={['dataMin', 'dataMax']} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "hsl(var(--card))",
@@ -350,12 +351,12 @@ const CashFlow = () => {
                     borderRadius: "8px",
                     fontSize: "12px",
                   }}
-                  formatter={(value: number, name: string) => [formatCurrency(value), name === "balance" ? "Projected Balance" : name === "inflow" ? "Inflows" : "Outflows"]}
+                  formatter={(value: number, name: string) => [formatCurrency(value), name === "balance" ? "Cash Balance" : name === "inflow" ? "Inflows" : "Outflows"]}
                 />
-                <Area type="monotone" dataKey="inflow" stroke="hsl(142 71% 45%)" fill="hsl(142 71% 45% / 0.1)" strokeWidth={2} name="inflow" />
-                <Area type="monotone" dataKey="outflow" stroke="hsl(0 84% 60%)" fill="hsl(0 84% 60% / 0.1)" strokeWidth={2} name="outflow" />
-                <Area type="monotone" dataKey="balance" stroke="hsl(var(--accent))" fill="hsl(var(--accent) / 0.15)" strokeWidth={2} strokeDasharray="6 3" name="balance" />
-              </AreaChart>
+                <Bar yAxisId="right" dataKey="balance" fill="hsl(var(--accent) / 0.25)" stroke="hsl(var(--accent))" strokeWidth={1} name="balance" radius={[4, 4, 0, 0]} />
+                <Area yAxisId="left" type="monotone" dataKey="inflow" stroke="hsl(142 71% 45%)" fill="hsl(142 71% 45% / 0.1)" strokeWidth={2} name="inflow" />
+                <Area yAxisId="left" type="monotone" dataKey="outflow" stroke="hsl(0 84% 60%)" fill="hsl(0 84% 60% / 0.1)" strokeWidth={2} name="outflow" />
+              </ComposedChart>
             </ResponsiveContainer>
           )}
         </CardContent>
