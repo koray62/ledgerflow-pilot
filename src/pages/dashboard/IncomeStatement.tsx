@@ -287,9 +287,13 @@ const IncomeStatement = () => {
               Compare
             </Label>
           </div>
-          {compareEnabled && (
+          {compareEnabled && (() => {
+            const yr = new Date().getFullYear();
+            const isFullYear = startDate?.getFullYear() === yr && startDate?.getMonth() === 0 && startDate?.getDate() === 1
+              && endDate?.getFullYear() === yr && endDate?.getMonth() === 11 && endDate?.getDate() === 31;
+            return (
             <Button
-              variant="outline"
+              variant={isFullYear ? "default" : "outline"}
               size="sm"
               className="text-xs"
               onClick={() => {
