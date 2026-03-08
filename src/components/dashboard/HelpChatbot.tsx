@@ -197,7 +197,7 @@ export default function HelpChatbot() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col w-[420px] h-[600px] max-h-[80vh] rounded-xl border border-border bg-background shadow-2xl overflow-hidden">
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col w-[520px] h-[680px] max-h-[85vh] rounded-xl border border-border bg-background shadow-2xl overflow-hidden text-[0.9375rem]">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-sidebar">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-accent">
