@@ -461,7 +461,7 @@ export default function BankAccounts() {
       const mergedDesc = s.originalTx.detailedDescription
         ? `${s.originalTx.description} | ${s.originalTx.detailedDescription}`
         : s.originalTx.description;
-      const invMatches = mergedDesc.match(/INV-\d+/gi) || [];
+      const invMatches = mergedDesc.match(/LP\d{10}/gi) || [];
       let matchedInvoice: Tables<"invoices"> | null = null;
       const arAccount = chartAccounts.find(
         (a) => a.account_type === "asset" && a.name.toLowerCase().includes("receivable")
