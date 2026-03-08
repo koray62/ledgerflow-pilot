@@ -1,25 +1,45 @@
 
+## Multi-Currency Support — IMPLEMENTED
 
-## Problem
+### Supported Currencies
+USD, EUR, AED (UAE Dirham), TRY (Turkish Lira), SAR (Saudi Riyal)
 
-In the "Review & Approve Journal Entries" table, the Amount column shows plain numbers (e.g., `50000`, `4.22`, `308.3`) without any sign indicator. Since journal entries always use absolute amounts (debit/credit accounts indicate direction), users can't tell at a glance whether the original transaction was an inflow or outflow.
+### Database Changes ✅
+- `tenants.default_currency` (text, NOT NULL, default 'USD')
+- `journal_entries.currency` (text, NOT NULL, default 'USD')
+- `invoices.currency` (text, NOT NULL, default 'USD')
+- `bank_accounts.currency` already existed
 
-## Solution
+### Shared Utility (`src/lib/utils.ts`) ✅
+- `SUPPORTED_CURRENCIES` constant with code, label, symbol
+- `formatCurrency(amount, currency, options?)` using `Intl.NumberFormat`
+- `CurrencyCode` type
 
-Enhance the Amount column in the suggestions review table to clearly indicate the direction of the original transaction:
+### Tenant Context (`useTenant.tsx`) ✅
+- `defaultCurrency` exposed from tenant record
 
-1. **Color coding**: Green for inflows (credits/positive original amounts), red for outflows (debits/negative original amounts)
-2. **Prefix indicators**: Show `▲` or `+` for inflows and `▼` or `−` for outflows next to the amount
-3. **Apply to both states**: The pending (editable input) and approved (read-only span) views should both show the direction indicator
+### Settings (`DashboardSettings.tsx`) ✅
+- Default Currency dropdown in Organization section
 
-### Technical approach
+### Form Currency Selectors ✅
+- **JournalEntryForm**: Currency dropdown, defaults to tenant currency, saves to `journal_entries.currency`
+- **Invoices**: Currency dropdown in create/edit dialog, saves to `invoices.currency`
+- **BankAccounts**: Select dropdown with all 5 currencies (replaced text input)
 
-- Each suggestion object already has `originalTx.amount` which preserves the sign from the CSV. Use this to determine direction.
-- For the **read-only** display: format with color + arrow prefix based on `originalTx.amount` sign
-- For the **editable input**: add a colored badge/label next to the input showing the direction (e.g., a small "IN" or "OUT" badge), since the input itself shows the absolute journal amount
-- Apply similar treatment to the raw transaction preview table (line ~547) which already has color but could benefit from clearer `+`/`-` prefixes
+### Financial Statements ✅
+All reports use `formatCurrency(amount, defaultCurrency)`:
+- Balance Sheet, Income Statement, Cash Flow, Performance Analysis, Dashboard Overview
+- Chart of Accounts, Journal Entries, OCR Upload
+- Bank account balances display in account's own currency
 
-### Files to change
+### Design Decision: Single-Currency Reporting
+- Financial statements report in tenant's default currency only
+- `currency` field on journal_entries/invoices is metadata for the transaction currency
+- Journal line debits/credits are always in the functional (reporting) currency
 
-- `src/pages/dashboard/BankAccounts.tsx` — Update the Amount cells in both the transaction preview table and the journal entry review table to include direction indicators and consistent color coding
-
+### Future Enhancements (out of scope)
+- Multi-currency FX rate table
+- Unrealized gain/loss calculations
+- Currency revaluation entries
+- Currency badge on mixed-currency views
+- Bank → Journal Entry currency validation on CSV import
