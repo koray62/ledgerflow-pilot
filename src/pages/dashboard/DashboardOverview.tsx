@@ -19,7 +19,7 @@ import { formatCurrency as fmtCurrency, formatDisplayDate } from "@/lib/utils";
 import { format, subMonths, startOfMonth, endOfMonth, parseISO } from "date-fns";
 
 const DashboardOverview = () => {
-  const { tenantId, defaultCurrency } = useTenant();
+  const { tenantId, tenantName, defaultCurrency } = useTenant();
   const fmt = (val: number) => fmtCurrency(val, defaultCurrency, { minimumFractionDigits: 0 });
 
   // ── All journal lines with account info ──
@@ -254,6 +254,7 @@ const DashboardOverview = () => {
     <div className="p-6 lg:p-8 space-y-6">
       {/* Header */}
       <div>
+        {tenantName && <p className="text-sm font-medium text-muted-foreground mb-0.5">{tenantName}</p>}
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-sm text-muted-foreground">Welcome back. Here's your financial overview.</p>
       </div>
