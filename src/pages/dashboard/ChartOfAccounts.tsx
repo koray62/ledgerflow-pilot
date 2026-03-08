@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, Loader2, ChevronRight, ChevronDown, CornerDownRight, AlertTriangle } from "lucide-react";
+import { Plus, Search, Loader2, ChevronRight, ChevronDown, CornerDownRight, AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -96,6 +100,12 @@ const ChartOfAccounts = () => {
   const [description, setDescription] = useState("");
   const [parentId, setParentId] = useState<string | null>(null);
 
+  // Detail / Edit / Delete state
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [deleteAccount, setDeleteAccount] = useState<Account | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ["chart-of-accounts", tenantId],
     enabled: !!tenantId,
@@ -126,6 +136,73 @@ const ChartOfAccounts = () => {
       return data ?? [];
     },
   });
+
+  // Fetch journal lines for the selected account (ledger detail)
+  const selectedAccount = selectedAccountId ? accounts.find((a) => a.id === selectedAccountId) : null;
+  const { data: ledgerLines = [], isLoading: ledgerLoading } = useQuery({
+    queryKey: ["account-ledger", tenantId, selectedAccountId],
+    enabled: !!tenantId && !!selectedAccountId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("journal_lines")
+        .select("id, debit, credit, description, journal_entry_id, created_at")
+        .eq("tenant_id", tenantId!)
+        .eq("account_id", selectedAccountId!)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true });
+      return data ?? [];
+    },
+  });
+
+  // Fetch journal entries for ledger lines
+  const entryIds = useMemo(() => [...new Set(ledgerLines.map((l) => l.journal_entry_id))], [ledgerLines]);
+  const { data: ledgerEntries = [] } = useQuery({
+    queryKey: ["account-ledger-entries", entryIds],
+    enabled: entryIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("journal_entries")
+        .select("id, entry_date, entry_number, description")
+        .in("id", entryIds)
+        .is("deleted_at", null);
+      return data ?? [];
+    },
+  });
+
+  const entriesMap = useMemo(() => {
+    const m = new Map<string, { entry_date: string; entry_number: string; description: string }>();
+    ledgerEntries.forEach((e) => m.set(e.id, e));
+    return m;
+  }, [ledgerEntries]);
+
+  // Build ledger rows sorted by date with running balance
+  const ledgerRows = useMemo(() => {
+    if (!selectedAccount) return [];
+    const isDebitNormal = selectedAccount.account_type === "asset" || selectedAccount.account_type === "expense";
+    const sorted = [...ledgerLines].sort((a, b) => {
+      const ea = entriesMap.get(a.journal_entry_id);
+      const eb = entriesMap.get(b.journal_entry_id);
+      const da = ea?.entry_date ?? a.created_at;
+      const db = eb?.entry_date ?? b.created_at;
+      return da.localeCompare(db);
+    });
+    let running = 0;
+    return sorted.map((line) => {
+      const debit = Number(line.debit);
+      const credit = Number(line.credit);
+      running += isDebitNormal ? debit - credit : credit - debit;
+      const entry = entriesMap.get(line.journal_entry_id);
+      return {
+        id: line.id,
+        date: entry?.entry_date ?? "",
+        entryNumber: entry?.entry_number ?? "",
+        description: line.description || entry?.description || "",
+        debit,
+        credit,
+        runningBalance: running,
+      };
+    });
+  }, [ledgerLines, entriesMap, selectedAccount]);
 
   // Compute own balance per account (from journal lines only)
   const ownBalances = useMemo(() => {
@@ -166,12 +243,10 @@ const ChartOfAccounts = () => {
     if (!search.trim()) {
       // Remove collapsed children
       const visible: typeof flatList = [];
-      const collapsedParents = new Set<string>();
       for (const item of flatList) {
         // Check if any ancestor is collapsed
         let isHidden = false;
         if (item.account.parent_id) {
-          // Walk up parents to check collapse
           let pid: string | null = item.account.parent_id;
           while (pid) {
             if (collapsedIds.has(pid)) {
@@ -199,6 +274,9 @@ const ChartOfAccounts = () => {
     [accounts]
   );
 
+  // Check if account has children
+  const hasChildAccounts = (id: string) => accounts.some((a) => a.parent_id === id);
+
   const toggleCollapse = (id: string) => {
     setCollapsedIds((prev) => {
       const next = new Set(prev);
@@ -217,6 +295,7 @@ const ChartOfAccounts = () => {
     setAccountType("expense");
     setDescription("");
     setParentId(null);
+    setEditingAccount(null);
   };
 
   const openAddSubAccount = (parent: Account) => {
@@ -225,6 +304,50 @@ const ChartOfAccounts = () => {
     setAccountType(parent.account_type);
     setCode(parent.code + ".");
     setDialogOpen(true);
+  };
+
+  const openEditAccount = (acc: Account) => {
+    setEditingAccount(acc);
+    setCode(acc.code);
+    setName(acc.name);
+    setAccountType(acc.account_type);
+    setDescription(acc.description ?? "");
+    setParentId(acc.parent_id);
+    setDialogOpen(true);
+  };
+
+  const handleDeleteClick = (acc: Account) => {
+    const balance = accountBalances[acc.id] ?? 0;
+    if (Math.abs(balance) > 0.001) {
+      toast({ title: "Cannot delete", description: "Account has a non-zero balance.", variant: "destructive" });
+      return;
+    }
+    if (hasChildAccounts(acc.id)) {
+      toast({ title: "Cannot delete", description: "Account has sub-accounts. Delete them first.", variant: "destructive" });
+      return;
+    }
+    setDeleteAccount(acc);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteAccount || !tenantId) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("chart_of_accounts")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", deleteAccount.id)
+        .eq("tenant_id", tenantId);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["chart-of-accounts", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["account-balances", tenantId] });
+      toast({ title: "Account deleted", description: `${deleteAccount.code} – ${deleteAccount.name} removed.` });
+      setDeleteAccount(null);
+    } catch (err: any) {
+      toast({ title: "Failed to delete", description: err.message, variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleSave = async () => {
@@ -238,7 +361,7 @@ const ChartOfAccounts = () => {
       return;
     }
 
-    const existing = accounts.find((a) => a.code === code.trim());
+    const existing = accounts.find((a) => a.code === code.trim() && a.id !== editingAccount?.id);
     if (existing) {
       toast({ title: "Duplicate code", description: `Account code ${code} already exists.`, variant: "destructive" });
       return;
@@ -246,26 +369,43 @@ const ChartOfAccounts = () => {
 
     setSaving(true);
     try {
-      const { error } = await supabase.from("chart_of_accounts").insert({
-        tenant_id: tenantId,
-        code: code.trim(),
-        name: name.trim(),
-        account_type: accountType,
-        description: description.trim() || null,
-        created_by: user.id,
-        parent_id: parentId,
-      });
-
-      if (error) throw error;
+      if (editingAccount) {
+        // Update
+        const { error } = await supabase
+          .from("chart_of_accounts")
+          .update({
+            code: code.trim(),
+            name: name.trim(),
+            account_type: accountType,
+            description: description.trim() || null,
+            parent_id: parentId,
+          })
+          .eq("id", editingAccount.id)
+          .eq("tenant_id", tenantId);
+        if (error) throw error;
+        toast({ title: "Account updated", description: `${code} – ${name} saved.` });
+      } else {
+        // Insert
+        const { error } = await supabase.from("chart_of_accounts").insert({
+          tenant_id: tenantId,
+          code: code.trim(),
+          name: name.trim(),
+          account_type: accountType,
+          description: description.trim() || null,
+          created_by: user.id,
+          parent_id: parentId,
+        });
+        if (error) throw error;
+        toast({ title: "Account created", description: `${code} – ${name} added successfully.` });
+      }
 
       queryClient.invalidateQueries({ queryKey: ["chart-of-accounts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["chart-of-accounts-active", tenantId] });
-      toast({ title: "Account created", description: `${code} – ${name} added successfully.` });
       resetForm();
       setDialogOpen(false);
     } catch (err: any) {
-      console.error("Create account error:", err);
-      toast({ title: "Failed to create account", description: err.message, variant: "destructive" });
+      console.error("Save account error:", err);
+      toast({ title: "Failed to save account", description: err.message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -285,12 +425,12 @@ const ChartOfAccounts = () => {
         </Button>
       </div>
 
-      {/* Add Account Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* Add/Edit Account Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setDialogOpen(open); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-foreground">
-              {parentId ? "Add Sub-Account" : "Add Account"}
+              {editingAccount ? "Edit Account" : parentId ? "Add Sub-Account" : "Add Account"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -317,11 +457,13 @@ const ChartOfAccounts = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">None (top-level)</SelectItem>
-                  {parentOptions.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.code} – {a.name}
-                    </SelectItem>
-                  ))}
+                  {parentOptions
+                    .filter((a) => a.id !== editingAccount?.id) // Can't be own parent
+                    .map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.code} – {a.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               {selectedParent && (
@@ -379,17 +521,97 @@ const ChartOfAccounts = () => {
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)} disabled={saving}>
+              <Button variant="outline" size="sm" onClick={() => { resetForm(); setDialogOpen(false); }} disabled={saving}>
                 Cancel
               </Button>
               <Button size="sm" onClick={handleSave} disabled={saving} className="gap-2">
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {parentId ? "Add Sub-Account" : "Add Account"}
+                {editingAccount ? "Save Changes" : parentId ? "Add Sub-Account" : "Add Account"}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteAccount} onOpenChange={(open) => { if (!open) setDeleteAccount(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Account</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{deleteAccount?.code} – {deleteAccount?.name}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Transaction Ledger Sheet */}
+      <Sheet open={!!selectedAccountId} onOpenChange={(open) => { if (!open) setSelectedAccountId(null); }}>
+        <SheetContent className="sm:max-w-2xl w-full overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-3">
+              <span className="font-mono text-muted-foreground">{selectedAccount?.code}</span>
+              <span>{selectedAccount?.name}</span>
+              {selectedAccount && (
+                <Badge variant="outline" className={`capitalize text-xs ${typeColors[selectedAccount.account_type] ?? ""}`}>
+                  {selectedAccount.account_type}
+                </Badge>
+              )}
+            </SheetTitle>
+            {selectedAccount && (
+              <p className={`text-lg font-semibold font-mono ${(accountBalances[selectedAccount.id] ?? 0) < 0 ? "text-destructive" : "text-foreground"}`}>
+                {(accountBalances[selectedAccount.id] ?? 0) < 0
+                  ? `(${fmt(accountBalances[selectedAccount.id] ?? 0)})`
+                  : fmt(accountBalances[selectedAccount.id] ?? 0)}
+              </p>
+            )}
+          </SheetHeader>
+
+          <div className="mt-6">
+            {ledgerLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+              </div>
+            ) : ledgerRows.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">No transactions for this account.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-24">Date</TableHead>
+                    <TableHead className="w-24">Entry #</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-right w-24">Debit</TableHead>
+                    <TableHead className="text-right w-24">Credit</TableHead>
+                    <TableHead className="text-right w-28">Balance</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {ledgerRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-mono text-xs">{row.date}</TableCell>
+                      <TableCell className="font-mono text-xs">{row.entryNumber}</TableCell>
+                      <TableCell className="text-sm truncate max-w-[200px]" title={row.description}>{row.description || "—"}</TableCell>
+                      <TableCell className="text-right font-mono text-sm">{row.debit > 0 ? fmt(row.debit) : ""}</TableCell>
+                      <TableCell className="text-right font-mono text-sm">{row.credit > 0 ? fmt(row.credit) : ""}</TableCell>
+                      <TableCell className={`text-right font-mono text-sm font-medium ${row.runningBalance < 0 ? "text-destructive" : "text-foreground"}`}>
+                        {row.runningBalance < 0 ? `(${fmt(row.runningBalance)})` : fmt(row.runningBalance)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <Card>
         <CardHeader className="pb-3">
@@ -422,7 +644,7 @@ const ChartOfAccounts = () => {
                      <th className="pb-3 text-left text-xs font-medium text-muted-foreground w-24">Type</th>
                      <th className="pb-3 text-left text-xs font-medium text-muted-foreground min-w-[200px]">Description</th>
                      <th className="pb-3 text-right text-xs font-medium text-muted-foreground w-32">Balance</th>
-                     <th className="pb-3 text-right text-xs font-medium text-muted-foreground w-16"></th>
+                     <th className="pb-3 text-right text-xs font-medium text-muted-foreground w-28">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -433,13 +655,14 @@ const ChartOfAccounts = () => {
                     return (
                       <tr
                         key={acc.id}
-                        className={`border-b border-border/50 transition-colors hover:bg-muted/50 group ${isParent && depth === 0 ? "bg-muted/30" : ""}`}
+                        className={`border-b border-border/50 transition-colors hover:bg-muted/50 group cursor-pointer ${isParent && depth === 0 ? "bg-muted/30" : ""}`}
+                        onClick={() => setSelectedAccountId(acc.id)}
                       >
                         <td className="py-3 font-mono text-sm text-muted-foreground">
                           <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 1.25}rem` }}>
                             {hasChildren && !search ? (
                               <button
-                                onClick={() => toggleCollapse(acc.id)}
+                                onClick={(e) => { e.stopPropagation(); toggleCollapse(acc.id); }}
                                 className="p-0.5 rounded hover:bg-muted"
                               >
                                 {isCollapsed ? (
@@ -488,15 +711,35 @@ const ChartOfAccounts = () => {
                           )}
                         </td>
                         <td className="py-3 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Add sub-account"
-                            onClick={() => openAddSubAccount(acc)}
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              title="Edit account"
+                              onClick={(e) => { e.stopPropagation(); openEditAccount(acc); }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                              title="Delete account"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteClick(acc); }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              title="Add sub-account"
+                              onClick={(e) => { e.stopPropagation(); openAddSubAccount(acc); }}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
