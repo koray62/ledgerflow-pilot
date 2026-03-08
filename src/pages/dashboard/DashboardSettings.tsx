@@ -268,6 +268,7 @@ const DashboardSettings = () => {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
             <Button variant="hero" size="sm" className="mt-4" onClick={handleSave} disabled={saving || !name.trim()}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Changes
