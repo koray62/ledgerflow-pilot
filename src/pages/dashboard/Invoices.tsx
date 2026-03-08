@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
 import { formatCurrency as fmtCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { useClosedFiscalYears } from "@/hooks/useClosedFiscalYears";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,6 +62,7 @@ const TAX_RATE = 0.2;
 const Invoices = () => {
   const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
+  const { isDateInClosedYear } = useClosedFiscalYears();
   const fmt = (n: number, currency?: string) => fmtCurrency(n, currency ?? defaultCurrency);
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -278,6 +280,7 @@ const Invoices = () => {
     const errs: string[] = [];
     if (!customerId) errs.push("Select a customer");
     if (!dueDate) errs.push("Due date is required");
+    if (invoiceDate && isDateInClosedYear(invoiceDate)) errs.push("Cannot create invoices in a closed fiscal year.");
     if (lines.length === 0) errs.push("Add at least one line item");
     lines.forEach((l, i) => {
       if (!l.description) errs.push(`Line ${i + 1}: description required`);

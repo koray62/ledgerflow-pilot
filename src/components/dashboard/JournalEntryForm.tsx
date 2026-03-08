@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { formatCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
+import { useClosedFiscalYears } from "@/hooks/useClosedFiscalYears";
 
 interface JournalLine {
   id?: string;
@@ -39,6 +40,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
   const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { isDateInClosedYear } = useClosedFiscalYears();
 
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [description, setDescription] = useState("");
@@ -197,6 +199,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
     const errs: string[] = [];
     if (!description.trim()) errs.push("Description is required.");
     if (!entryDate) errs.push("Date is required.");
+    if (entryDate && isDateInClosedYear(entryDate)) errs.push("Cannot create entries in a closed fiscal year.");
     if (description.trim().length > 200) errs.push("Description must be under 200 characters.");
 
     const validLines = lines.filter((l) => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0));
