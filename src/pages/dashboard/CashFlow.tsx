@@ -91,6 +91,24 @@ const CashFlow = () => {
     },
   });
 
+  // Fetch historical cash account journal lines with dates for actuals
+  const { data: cashJournalLines = [] } = useQuery({
+    queryKey: ["cf-cash-lines", tenantId, cashAccountIds, startStr, endStr],
+    enabled: !!tenantId && cashAccountIds.length > 0,
+    queryFn: async () => {
+      let query = supabase
+        .from("journal_lines")
+        .select("debit, credit, journal_entry_id, journal_entries!inner(entry_date)")
+        .eq("tenant_id", tenantId!)
+        .in("account_id", cashAccountIds)
+        .is("deleted_at", null);
+      if (startStr) query = query.gte("journal_entries.entry_date", startStr);
+      if (endStr) query = query.lte("journal_entries.entry_date", endStr);
+      const { data } = await query;
+      return (data ?? []) as Array<{ debit: number; credit: number; journal_entries: { entry_date: string } }>;
+    },
+  });
+
   // Monthly outflows from bills in selected range
   const { data: monthlyBurn = 0 } = useQuery({
     queryKey: ["cf-burn", tenantId, startStr, endStr],
@@ -165,12 +183,14 @@ const CashFlow = () => {
   const runway = monthlyBurn > 0 ? netCashPosition / monthlyBurn : null;
   const showWarning = runway !== null && runway < 6;
 
-  // Build monthly forecast based on selected date range (or default 12 months from now)
+  // Build monthly chart using actuals for past months, projections for future
   const chartData = (() => {
     const rangeStart = startDate ?? new Date();
     const rangeEnd = endDate ?? new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 12, 0);
     const firstMonth = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
     const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const months: { month: string; label: string; start: Date; end: Date }[] = [];
     const cursor = new Date(firstMonth);
@@ -194,35 +214,50 @@ const CashFlow = () => {
     months.forEach((m) => {
       let inflow = 0;
       let outflow = 0;
+      const isPast = m.start < currentMonthStart;
 
-      outstandingInvoices.forEach((inv) => {
-        const due = new Date(inv.due_date);
-        if (due >= m.start && due <= m.end) {
-          inflow += Number(inv.total_amount) - Number(inv.amount_paid);
-        }
-      });
-
-      outstandingBills.forEach((bill) => {
-        const due = new Date(bill.due_date);
-        if (due >= m.start && due <= m.end) {
-          outflow += Number(bill.total_amount) - Number(bill.amount_paid);
-        }
-      });
-
-      forecasts.forEach((f) => {
-        const fd = new Date(f.forecast_date);
-        if (f.is_recurring && f.recurrence_interval === "monthly") {
-          if (fd <= m.end) {
-            const amt = Number(f.amount);
-            if (amt >= 0) inflow += amt; else outflow += Math.abs(amt);
+      if (isPast) {
+        // Use actual journal line data for past months
+        cashJournalLines.forEach((line) => {
+          const entryDate = new Date(line.journal_entries.entry_date);
+          if (entryDate >= m.start && entryDate <= m.end) {
+            const debit = Number(line.debit);
+            const credit = Number(line.credit);
+            inflow += debit;
+            outflow += credit;
           }
-        } else {
-          if (fd >= m.start && fd <= m.end) {
-            const amt = Number(f.amount);
-            if (amt >= 0) inflow += amt; else outflow += Math.abs(amt);
+        });
+      } else {
+        // Use projections for current and future months
+        outstandingInvoices.forEach((inv) => {
+          const due = new Date(inv.due_date);
+          if (due >= m.start && due <= m.end) {
+            inflow += Number(inv.total_amount) - Number(inv.amount_paid);
           }
-        }
-      });
+        });
+
+        outstandingBills.forEach((bill) => {
+          const due = new Date(bill.due_date);
+          if (due >= m.start && due <= m.end) {
+            outflow += Number(bill.total_amount) - Number(bill.amount_paid);
+          }
+        });
+
+        forecasts.forEach((f) => {
+          const fd = new Date(f.forecast_date);
+          if (f.is_recurring && f.recurrence_interval === "monthly") {
+            if (fd <= m.end) {
+              const amt = Number(f.amount);
+              if (amt >= 0) inflow += amt; else outflow += Math.abs(amt);
+            }
+          } else {
+            if (fd >= m.start && fd <= m.end) {
+              const amt = Number(f.amount);
+              if (amt >= 0) inflow += amt; else outflow += Math.abs(amt);
+            }
+          }
+        });
+      }
 
       running += inflow - outflow;
       result.push({ month: m.month, inflow, outflow, balance: running });
