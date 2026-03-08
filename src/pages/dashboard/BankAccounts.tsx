@@ -472,16 +472,6 @@ export default function BankAccounts() {
     }
   }, [suggestions, tenantId, importAccountId, user, toast, qc]);
 
-  const approveAll = async () => {
-    setBulkApproving(true);
-    for (let i = 0; i < suggestions.length; i++) {
-      if (suggestions[i].status === "pending") {
-        await approveEntry(i);
-      }
-    }
-    setBulkApproving(false);
-  };
-
   const updateSuggestion = (idx: number, field: keyof AISuggestion, value: any) => {
     setSuggestions((prev) => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
   };
@@ -489,6 +479,29 @@ export default function BankAccounts() {
   const filtered = accounts.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()) || (a.institution ?? "").toLowerCase().includes(search.toLowerCase()));
 
   const accountName = (id: string) => chartAccounts.find((a) => a.id === id)?.name ?? "Unknown";
+
+  const isReviewVisible = useCallback((s: AISuggestion) => {
+    const f = reviewFilters;
+    const low = (v: string) => v.toLowerCase();
+    if (f.status && !low(s.status).includes(low(f.status))) return false;
+    if (f.date && !s.originalTx.date.includes(f.date)) return false;
+    if (f.reference && !low(s.reference).includes(low(f.reference))) return false;
+    if (f.description && !low(s.description).includes(low(f.description))) return false;
+    if (f.debit && !low(accountName(s.debitAccountId)).includes(low(f.debit))) return false;
+    if (f.credit && !low(accountName(s.creditAccountId)).includes(low(f.credit))) return false;
+    if (f.amount && !String(s.amount).includes(f.amount)) return false;
+    return true;
+  }, [reviewFilters, chartAccounts]);
+
+  const approveAll = async () => {
+    setBulkApproving(true);
+    for (let i = 0; i < suggestions.length; i++) {
+      if (suggestions[i].status === "pending" && isReviewVisible(suggestions[i])) {
+        await approveEntry(i);
+      }
+    }
+    setBulkApproving(false);
+  };
 
   /* ─── RENDER ─── */
   return (
@@ -738,8 +751,8 @@ export default function BankAccounts() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <p className="font-medium">Review & Approve Journal Entries</p>
-                      <Button onClick={approveAll} disabled={bulkApproving || !suggestions.some((s) => s.status === "pending")}>
-                        {bulkApproving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Approving…</> : "Approve All Pending"}
+                      <Button onClick={approveAll} disabled={bulkApproving || !suggestions.some((s) => s.status === "pending" && isReviewVisible(s))}>
+                        {bulkApproving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Approving…</> : "Approve All Filtered"}
                       </Button>
                     </div>
                     <div className="overflow-x-auto">
@@ -762,18 +775,7 @@ export default function BankAccounts() {
                         <TableBody>
                           {suggestions
                             .map((s, i) => ({ s, i }))
-                            .filter(({ s }) => {
-                              const f = reviewFilters;
-                              const low = (v: string) => v.toLowerCase();
-                              if (f.status && !low(s.status).includes(low(f.status))) return false;
-                              if (f.date && !s.originalTx.date.includes(f.date)) return false;
-                              if (f.reference && !low(s.reference).includes(low(f.reference))) return false;
-                              if (f.description && !low(s.description).includes(low(f.description))) return false;
-                              if (f.debit && !low(accountName(s.debitAccountId)).includes(low(f.debit))) return false;
-                              if (f.credit && !low(accountName(s.creditAccountId)).includes(low(f.credit))) return false;
-                              if (f.amount && !String(s.amount).includes(f.amount)) return false;
-                              return true;
-                            })
+                            .filter(({ s }) => isReviewVisible(s))
                             .map(({ s, i }) => (
                             <TableRow key={i} className={s.status === "approved" ? "opacity-60" : ""}>
                               <TableCell>
