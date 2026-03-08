@@ -19,7 +19,7 @@ import { formatCurrency as fmtCurrency, formatDisplayDate } from "@/lib/utils";
 import { format, subMonths, startOfMonth, endOfMonth, parseISO } from "date-fns";
 
 const DashboardOverview = () => {
-  const { tenantId, defaultCurrency } = useTenant();
+  const { tenantId, tenantName, defaultCurrency } = useTenant();
   const fmt = (val: number) => fmtCurrency(val, defaultCurrency, { minimumFractionDigits: 0 });
 
   // ── All journal lines with account info ──
