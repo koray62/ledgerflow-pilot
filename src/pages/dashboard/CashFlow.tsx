@@ -245,16 +245,16 @@ const CashFlow = () => {
 
         forecasts.forEach((f) => {
           const fd = new Date(f.forecast_date);
+          const amt = Math.abs(Number(f.amount) || 0);
+          const applyForecast = () => {
+            if (f.category === "expense") outflow += amt;
+            else inflow += amt;
+          };
+
           if (f.is_recurring && f.recurrence_interval === "monthly") {
-            if (fd <= m.end) {
-              const amt = Number(f.amount);
-              if (amt >= 0) inflow += amt; else outflow += Math.abs(amt);
-            }
+            if (fd <= m.end) applyForecast();
           } else {
-            if (fd >= m.start && fd <= m.end) {
-              const amt = Number(f.amount);
-              if (amt >= 0) inflow += amt; else outflow += Math.abs(amt);
-            }
+            if (fd >= m.start && fd <= m.end) applyForecast();
           }
         });
       }
