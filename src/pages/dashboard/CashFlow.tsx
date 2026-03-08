@@ -139,7 +139,7 @@ const CashFlow = () => {
       if (startStr) query = query.gte("due_date", startStr);
       if (endStr) query = query.lte("due_date", endStr);
       const { data } = await query;
-      return data ?? [];
+      return (data ?? []).filter(inv => Number(inv.total_amount) - Number(inv.amount_paid) > 0);
     },
   });
 
@@ -157,7 +157,7 @@ const CashFlow = () => {
       if (startStr) query = query.gte("due_date", startStr);
       if (endStr) query = query.lte("due_date", endStr);
       const { data } = await query;
-      return data ?? [];
+      return (data ?? []).filter(b => Number(b.total_amount) - Number(b.amount_paid) > 0);
     },
   });
 
