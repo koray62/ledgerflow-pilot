@@ -3,7 +3,7 @@ import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   BookOpen, LayoutDashboard, BookText, Receipt, TrendingUp,
   Building2, Users, CreditCard, FileText, Settings, LogOut,
-  ChevronLeft, Menu, Scale, BarChart3
+  ChevronLeft, Menu, Scale, BarChart3, Activity
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ const navItems = [
   { title: "Balance Sheet", icon: Scale, path: "/dashboard/balance-sheet" },
   { title: "Income Statement", icon: BarChart3, path: "/dashboard/income-statement" },
   { title: "Cash Flow", icon: TrendingUp, path: "/dashboard/cashflow" },
+  { title: "Performance", icon: Activity, path: "/dashboard/performance" },
   { title: "Vendors & Customers", icon: Building2, path: "/dashboard/contacts" },
   
   { title: "Team", icon: Users, path: "/dashboard/team" },
