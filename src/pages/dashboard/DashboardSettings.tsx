@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, AlertTriangle, Upload, X, Lock } from "lucide-react";
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +34,7 @@ const DashboardSettings = () => {
   const [taxId, setTaxId] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [accountingBasis, setAccountingBasis] = useState("accrual");
   const [seeding, setSeeding] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [closingYear, setClosingYear] = useState(false);
@@ -43,7 +45,7 @@ const DashboardSettings = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("name, industry, fiscal_year_end, logo_url, address, tax_id" as any)
+        .select("name, industry, fiscal_year_end, logo_url, address, tax_id, default_currency, accounting_basis" as any)
         .eq("id", tenantId!)
         .single();
       if (error) throw error;
@@ -57,6 +59,7 @@ const DashboardSettings = () => {
       setIndustry(tenant.industry ?? "");
       setFiscalYearEnd(String(tenant.fiscal_year_end ?? 12));
       setDefaultCurrency((tenant as any).default_currency ?? "USD");
+      setAccountingBasis((tenant as any).accounting_basis ?? "accrual");
       setAddress(tenant.address ?? "");
       setTaxId(tenant.tax_id ?? "");
       // Generate signed URL from stored path
@@ -146,6 +149,7 @@ const DashboardSettings = () => {
         industry: industry.trim() || null,
         fiscal_year_end: parseInt(fiscalYearEnd, 10),
         default_currency: defaultCurrency,
+        accounting_basis: accountingBasis,
         address: address.trim() || null,
         tax_id: taxId.trim() || null,
       } as any)
