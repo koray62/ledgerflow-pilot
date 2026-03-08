@@ -5,6 +5,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { formatCurrency as fmtCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useClosedFiscalYears } from "@/hooks/useClosedFiscalYears";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,6 +64,7 @@ const Invoices = () => {
   const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
   const { isDateInClosedYear } = useClosedFiscalYears();
+  const { can } = usePermissions();
   const fmt = (n: number, currency?: string) => fmtCurrency(n, currency ?? defaultCurrency);
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -582,9 +584,11 @@ const Invoices = () => {
           <h1 className="text-2xl font-bold text-foreground">Invoices</h1>
           <p className="text-sm text-muted-foreground">Create and manage customer invoices</p>
         </div>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4 mr-1" /> New Invoice
-        </Button>
+        {can("invoices.edit") && (
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4 mr-1" /> New Invoice
+          </Button>
+        )}
       </div>
 
       {/* Filters */}

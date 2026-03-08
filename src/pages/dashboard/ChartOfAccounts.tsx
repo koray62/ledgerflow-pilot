@@ -21,6 +21,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 import { formatCurrency } from "@/lib/utils";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type AccountType = Database["public"]["Enums"]["account_type"];
 
@@ -89,6 +90,7 @@ function flattenTree(
 const ChartOfAccounts = () => {
   const { tenantId, defaultCurrency } = useTenant();
   const { user } = useAuth();
+  const { can } = usePermissions();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -423,9 +425,11 @@ const ChartOfAccounts = () => {
           <h1 className="text-2xl font-bold text-foreground">Chart of Accounts</h1>
           <p className="text-sm text-muted-foreground">Manage your account structure</p>
         </div>
-        <Button variant="hero" size="sm" className="gap-2" onClick={() => { resetForm(); setDialogOpen(true); }}>
-          <Plus className="h-4 w-4" /> Add Account
-        </Button>
+        {can("accounts.edit") && (
+          <Button variant="hero" size="sm" className="gap-2" onClick={() => { resetForm(); setDialogOpen(true); }}>
+            <Plus className="h-4 w-4" /> Add Account
+          </Button>
+        )}
       </div>
 
       {/* Add/Edit Account Dialog */}
