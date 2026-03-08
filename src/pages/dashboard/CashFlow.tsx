@@ -109,45 +109,54 @@ const CashFlow = () => {
 
   // Forecast entries
   const { data: forecasts = [] } = useQuery({
-    queryKey: ["cf-forecasts", tenantId],
+    queryKey: ["cf-forecasts", tenantId, startStr, endStr],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("forecast_entries")
         .select("forecast_date, description, amount, category, is_recurring, recurrence_interval")
         .eq("tenant_id", tenantId!)
         .is("deleted_at", null)
         .order("forecast_date");
+      if (startStr) query = query.gte("forecast_date", startStr);
+      if (endStr) query = query.lte("forecast_date", endStr);
+      const { data } = await query;
       return data ?? [];
     },
   });
 
   // Outstanding invoices (AR inflows)
   const { data: outstandingInvoices = [] } = useQuery({
-    queryKey: ["cf-invoices", tenantId],
+    queryKey: ["cf-invoices", tenantId, startStr, endStr],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("invoices")
         .select("due_date, total_amount, amount_paid, status")
         .eq("tenant_id", tenantId!)
         .is("deleted_at", null)
         .in("status", ["draft", "sent", "overdue"]);
+      if (startStr) query = query.gte("due_date", startStr);
+      if (endStr) query = query.lte("due_date", endStr);
+      const { data } = await query;
       return data ?? [];
     },
   });
 
   // Outstanding bills (AP outflows)
   const { data: outstandingBills = [], isLoading } = useQuery({
-    queryKey: ["cf-bills-outstanding", tenantId],
+    queryKey: ["cf-bills-outstanding", tenantId, startStr, endStr],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("bills")
         .select("due_date, total_amount, amount_paid, status")
         .eq("tenant_id", tenantId!)
         .is("deleted_at", null)
         .in("status", ["draft", "received", "overdue"]);
+      if (startStr) query = query.gte("due_date", startStr);
+      if (endStr) query = query.lte("due_date", endStr);
+      const { data } = await query;
       return data ?? [];
     },
   });
