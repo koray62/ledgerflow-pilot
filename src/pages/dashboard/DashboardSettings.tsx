@@ -33,7 +33,8 @@ const DashboardSettings = () => {
   const [saving, setSaving] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-
+  const [closingYear, setClosingYear] = useState(false);
+  const [selectedFY, setSelectedFY] = useState("");
   const { data: tenant, isLoading } = useQuery({
     queryKey: ["tenant-settings", tenantId],
     enabled: !!tenantId,
