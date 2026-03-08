@@ -312,8 +312,8 @@ const CashFlow = () => {
   const runway = monthlyBurn > 0 ? netCashPosition / monthlyBurn : null;
   const showWarning = runway !== null && runway < 6;
 
-  // For accrual mode: Net Cash from Operations = Net Income - ΔAR + ΔDeferred Revenue
-  const accrualNetCashFromOps = accrualNetIncome - accrualARChange + accrualDeferredRevChange;
+  // For accrual mode: Net Cash from Operations = Net Income - ΔAR + ΔDeferred Revenue + ΔSales Tax Payable
+  const accrualNetCashFromOps = accrualNetIncome - accrualARChange + accrualDeferredRevChange + accrualTaxPayableChange;
 
   // Build monthly chart
   const chartData = (() => {
