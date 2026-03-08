@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
+import { formatCurrency as fmtCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,8 +59,8 @@ const TAX_RATE = 0.2;
 
 /* ═══════════════════════════ COMPONENT ═══════════════════════════ */
 const Invoices = () => {
-  const { tenantId } = useTenant();
-  const { user } = useAuth();
+  const { tenantId, defaultCurrency } = useTenant();
+  const fmt = (n: number) => fmtCurrency(n, defaultCurrency);
   const qc = useQueryClient();
   const { toast } = useToast();
   const navigate = useNavigate();

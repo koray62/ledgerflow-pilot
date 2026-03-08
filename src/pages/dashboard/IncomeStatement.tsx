@@ -90,7 +90,8 @@ const computeBalances = (
 };
 
 const IncomeStatement = () => {
-  const { tenantId } = useTenant();
+  const { tenantId, defaultCurrency } = useTenant();
+  const fmt = (n: number) => formatCurrency(n, defaultCurrency, { abs: true });
   const [startDate, setStartDate] = useState<Date | undefined>(startOfYear(new Date()));
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
   const [compareEnabled, setCompareEnabled] = useState(false);

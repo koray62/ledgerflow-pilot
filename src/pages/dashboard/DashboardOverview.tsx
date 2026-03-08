@@ -105,9 +105,9 @@ const DashboardOverview = () => {
   });
 
   const stats = [
-    { label: "Cash Balance", value: formatCurrency(cashBalance), icon: DollarSign, up: cashBalance >= 0 },
-    { label: "Accounts Receivable", value: formatCurrency(arTotal), icon: TrendingUp, up: true },
-    { label: "Accounts Payable", value: formatCurrency(apTotal), icon: TrendingDown, up: false },
+    { label: "Cash Balance", value: formatCurrencyVal(cashBalance), icon: DollarSign, up: cashBalance >= 0 },
+    { label: "Accounts Receivable", value: formatCurrencyVal(arTotal), icon: TrendingUp, up: true },
+    { label: "Accounts Payable", value: formatCurrencyVal(apTotal), icon: TrendingDown, up: false },
     { label: "Journal Entries", value: entryCount.toLocaleString(), icon: FileText, up: true },
   ];
 

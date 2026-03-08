@@ -110,7 +110,8 @@ interface YearlyData {
 }
 
 const PerformanceAnalysis = () => {
-  const { tenantId, tenantName } = useTenant();
+  const { tenantId, tenantName, defaultCurrency } = useTenant();
+  const fmt = (n: number) => fmtCurrency(n, defaultCurrency, { maximumFractionDigits: 0 });
   const chartsRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
   const [drillYear, setDrillYear] = useState<number>(CURRENT_YEAR);

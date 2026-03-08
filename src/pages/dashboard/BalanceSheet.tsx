@@ -22,8 +22,6 @@ interface Account {
 
 const DEBIT_NORMAL: AccountType[] = ["asset", "expense"];
 
-const DEBIT_NORMAL: AccountType[] = ["asset", "expense"];
-
 const BalanceSheet = () => {
   const { tenantId, defaultCurrency } = useTenant();
   const [asOfDate, setAsOfDate] = useState<Date | undefined>(new Date());
