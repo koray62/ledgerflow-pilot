@@ -86,9 +86,7 @@ const JournalEntries = () => {
       e.entry_number.toLowerCase().includes(search.toLowerCase())
   );
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-
+  const fmt = (n: number) => formatCurrency(n, defaultCurrency);
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-6 flex items-center justify-between">

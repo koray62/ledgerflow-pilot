@@ -52,8 +52,7 @@ const statusColors: Record<string, string> = {
   cancelled: "bg-muted text-muted-foreground line-through",
 };
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+// fmt is now defined inside component to use defaultCurrency
 
 const TAX_RATE = 0.2;
 

@@ -29,7 +29,7 @@ import {
   Plus, Search, Pencil, Trash2, Upload, Loader2, Check, X, ExternalLink, CalendarIcon,
 } from "lucide-react";
 import { format, isAfter, isBefore, startOfDay } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency as fmtCurrency, SUPPORTED_CURRENCIES } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -64,8 +64,7 @@ interface AISuggestion {
 }
 
 /* ─── helpers ─── */
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+// fmt is now defined inside component to use defaultCurrency
 
 const DATE_FORMATS = [
   { value: "yyyy-mm-dd", label: "YYYY-MM-DD (2026-02-22)" },

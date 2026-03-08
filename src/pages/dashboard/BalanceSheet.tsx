@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useTenant } from "@/hooks/useTenant";
+import { formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { AsOfDateFilter } from "@/components/dashboard/DateRangeFilter";
@@ -19,14 +20,14 @@ interface Account {
   parent_id: string | null;
 }
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Math.abs(n));
+const DEBIT_NORMAL: AccountType[] = ["asset", "expense"];
 
 const DEBIT_NORMAL: AccountType[] = ["asset", "expense"];
 
 const BalanceSheet = () => {
-  const { tenantId } = useTenant();
+  const { tenantId, defaultCurrency } = useTenant();
   const [asOfDate, setAsOfDate] = useState<Date | undefined>(new Date());
+  const fmt = (n: number) => formatCurrency(n, defaultCurrency, { abs: true });
 
   const asOfStr = asOfDate ? format(asOfDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
 
