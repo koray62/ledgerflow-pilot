@@ -602,7 +602,7 @@ const ChartOfAccounts = () => {
                       <TableCell className="font-mono text-xs">{row.date}</TableCell>
                       <TableCell
                         className="font-mono text-xs text-accent underline cursor-pointer hover:text-accent/80"
-                        onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/journal?edit=${row.journalEntryId}`); }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/journal?edit=${row.journalEntryId}&from=coa`); }}
                       >{row.entryNumber}</TableCell>
                       <TableCell className="text-sm truncate max-w-[200px]" title={row.description}>{row.description || "—"}</TableCell>
                       <TableCell className="text-right font-mono text-sm">{row.debit > 0 ? fmt(row.debit) : ""}</TableCell>
