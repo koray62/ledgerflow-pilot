@@ -276,6 +276,17 @@ const CashFlow = () => {
             if (fd >= m.start && fd <= m.end) applyForecast();
           }
         });
+
+        // Include future-dated journal entries touching cash accounts
+        futureCashJournalLines.forEach((line) => {
+          const entryDate = new Date(line.journal_entries.entry_date);
+          if (entryDate >= m.start && entryDate <= m.end) {
+            const debit = Number(line.debit);
+            const credit = Number(line.credit);
+            inflow += debit;
+            outflow += credit;
+          }
+        });
       }
 
       running += inflow - outflow;
