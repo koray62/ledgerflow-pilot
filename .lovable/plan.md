@@ -1,25 +1,26 @@
 
 
-## Problem
+## Add Journal Entry Linking from Account Ledger Sheet
 
-In the "Review & Approve Journal Entries" table, the Amount column shows plain numbers (e.g., `50000`, `4.22`, `308.3`) without any sign indicator. Since journal entries always use absolute amounts (debit/credit accounts indicate direction), users can't tell at a glance whether the original transaction was an inflow or outflow.
+### What to change
+In `src/pages/dashboard/ChartOfAccounts.tsx`, make the Entry # column in the ledger sheet clickable, navigating the user to the Journal Entries page and opening that specific entry for editing.
 
-## Solution
+### How
 
-Enhance the Amount column in the suggestions review table to clearly indicate the direction of the original transaction:
+1. **Add `journal_entry_id` to ledger row data** — the `ledgerRows` memo already has access to `line.journal_entry_id` but doesn't include it in the returned object. Add `journalEntryId` to the mapped row.
 
-1. **Color coding**: Green for inflows (credits/positive original amounts), red for outflows (debits/negative original amounts)
-2. **Prefix indicators**: Show `▲` or `+` for inflows and `▼` or `−` for outflows next to the amount
-3. **Apply to both states**: The pending (editable input) and approved (read-only span) views should both show the direction indicator
+2. **Use `useNavigate`** from react-router-dom. When the Entry # cell is clicked, navigate to `/dashboard/journal?edit={journalEntryId}`.
 
-### Technical approach
+3. **In `JournalEntries.tsx`**, read the `edit` query param on mount. If present, set `editEntryId` and open the `JournalEntryForm` dialog automatically.
 
-- Each suggestion object already has `originalTx.amount` which preserves the sign from the CSV. Use this to determine direction.
-- For the **read-only** display: format with color + arrow prefix based on `originalTx.amount` sign
-- For the **editable input**: add a colored badge/label next to the input showing the direction (e.g., a small "IN" or "OUT" badge), since the input itself shows the absolute journal amount
-- Apply similar treatment to the raw transaction preview table (line ~547) which already has color but could benefit from clearer `+`/`-` prefixes
+### Changes
 
-### Files to change
+**`src/pages/dashboard/ChartOfAccounts.tsx`**:
+- Import `useNavigate` from `react-router-dom`
+- Add `journalEntryId: line.journal_entry_id` to the ledger row object (~line 195)
+- Make the Entry # `TableCell` (~line 600) a clickable link styled element: `onClick` calls `navigate(\`/dashboard/journal?edit=${row.journalEntryId}\`)`, with `e.stopPropagation()` and hover styling (underline, cursor-pointer, accent color)
 
-- `src/pages/dashboard/BankAccounts.tsx` — Update the Amount cells in both the transaction preview table and the journal entry review table to include direction indicators and consistent color coding
+**`src/pages/dashboard/JournalEntries.tsx`**:
+- Import `useSearchParams` from `react-router-dom`
+- On mount, read `searchParams.get("edit")`. If present, set `editEntryId` and `formOpen = true`, then clear the param from the URL
 
