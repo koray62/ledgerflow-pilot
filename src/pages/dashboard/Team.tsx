@@ -206,7 +206,7 @@ export default function Team() {
           <h1 className="text-2xl font-bold text-foreground">Team</h1>
           <p className="text-muted-foreground">Manage team members and roles</p>
         </div>
-        {isOwner && (
+        {canManageTeam && (
           <Button onClick={() => setInviteOpen(true)}>
             <Plus className="mr-2 h-4 w-4" /> Invite Member
           </Button>
@@ -233,19 +233,19 @@ export default function Team() {
               <TableHead>Email</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Joined</TableHead>
-              {isOwner && <TableHead className="w-12" />}
+              {canManageTeam && <TableHead className="w-12" />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={isOwner ? 5 : 4} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={canManageTeam ? 5 : 4} className="text-center py-8 text-muted-foreground">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={isOwner ? 5 : 4} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={canManageTeam ? 5 : 4} className="text-center py-8 text-muted-foreground">
                   No team members found.
                 </TableCell>
               </TableRow>
@@ -262,7 +262,7 @@ export default function Team() {
                       </Badge>
                     </TableCell>
                     <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
-                    {isOwner && (
+                    {canManageTeam && (
                       <TableCell>
                         {!isSelf && (
                           <DropdownMenu>
