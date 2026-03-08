@@ -373,7 +373,7 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
         ) : (
           <div className="space-y-5">
             {/* Header fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="je-date" className="text-xs text-muted-foreground">Date</Label>
                 <Input
@@ -392,6 +392,19 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId }: Props) => {
                   onChange={(e) => setDescription(e.target.value)}
                   maxLength={200}
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Currency</Label>
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUPPORTED_CURRENCIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
