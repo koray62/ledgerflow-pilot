@@ -782,7 +782,7 @@ export default function BankAccounts() {
                     })
                     .map((t) => (
                     <TableRow key={t.id}>
-                      <TableCell>{t.transaction_date}</TableCell>
+                      <TableCell>{formatDisplayDate(t.transaction_date, defaultCurrency)}</TableCell>
                       <TableCell>{t.description}</TableCell>
                       <TableCell className="font-mono text-xs">{t.reference ?? "—"}</TableCell>
                       <TableCell><Badge variant={t.transaction_type === "credit" ? "default" : "secondary"}>{t.transaction_type}</Badge></TableCell>
