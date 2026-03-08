@@ -272,10 +272,12 @@ const DashboardSettings = () => {
                 </Select>
               </div>
             </div>
-            <Button variant="hero" size="sm" className="mt-4" onClick={handleSave} disabled={saving || !name.trim()}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Changes
-            </Button>
+            {can("settings.edit") && (
+              <Button variant="hero" size="sm" className="mt-4" onClick={handleSave} disabled={saving || !name.trim()}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Changes
+              </Button>
+            )}
           </CardContent>
         </Card>
 
@@ -338,7 +340,7 @@ const DashboardSettings = () => {
               </div>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="hero" size="sm" disabled={closingYear || !selectedFY}>
+                  <Button variant="hero" size="sm" disabled={closingYear || !selectedFY || !can("settings.close_fiscal_year")}>
                     {closingYear && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     {closingYear ? "Closing…" : "Close Year"}
                   </Button>
