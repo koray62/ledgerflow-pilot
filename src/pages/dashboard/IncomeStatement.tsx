@@ -292,19 +292,19 @@ const IncomeStatement = () => {
             const isFullYear = startDate?.getFullYear() === yr && startDate?.getMonth() === 0 && startDate?.getDate() === 1
               && endDate?.getFullYear() === yr && endDate?.getMonth() === 11 && endDate?.getDate() === 31;
             return (
-            <Button
-              variant={isFullYear ? "default" : "outline"}
-              size="sm"
-              className="text-xs"
-              onClick={() => {
-                const yr = new Date().getFullYear();
-                setStartDate(new Date(yr, 0, 1));
-                setEndDate(new Date(yr, 11, 31));
-              }}
-            >
-              Full Year
-            </Button>
-          )}
+              <Button
+                variant={isFullYear ? "default" : "outline"}
+                size="sm"
+                className="text-xs"
+                onClick={() => {
+                  setStartDate(new Date(yr, 0, 1));
+                  setEndDate(new Date(yr, 11, 31));
+                }}
+              >
+                Full Year
+              </Button>
+            );
+          })()}
           <Badge
             variant="default"
             className={netIncome >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}
