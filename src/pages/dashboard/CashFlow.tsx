@@ -366,7 +366,12 @@ const CashFlow = () => {
           };
 
           if (f.is_recurring && f.recurrence_interval === "monthly") {
-            if (fd <= m.end) applyForecast();
+            // Apply once per month, only for months at or after the forecast start date
+            const forecastStartMonth = new Date(fd.getFullYear(), fd.getMonth(), 1);
+            const currentEvalMonth = new Date(m.start.getFullYear(), m.start.getMonth(), 1);
+            if (currentEvalMonth >= forecastStartMonth) {
+              applyForecast();
+            }
           } else {
             if (fd >= m.start && fd <= m.end) applyForecast();
           }
