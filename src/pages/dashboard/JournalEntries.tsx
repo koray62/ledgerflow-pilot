@@ -125,6 +125,8 @@ const JournalEntries = () => {
               <Button variant="hero" size="sm" className="gap-2" onClick={() => { setEditEntryId(null); setFormOpen(true); }}>
                 <Plus className="h-4 w-4" /> New Entry
               </Button>
+            )}
+          </div>
           <Card>
             <CardHeader className="pb-3">
               <div className="relative">
