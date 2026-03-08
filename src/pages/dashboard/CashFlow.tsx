@@ -152,7 +152,8 @@ const CashFlow = () => {
     },
   });
 
-  const runway = monthlyBurn > 0 ? cashBalance / monthlyBurn : null;
+  const netCashPosition = cashBalance - apBalance;
+  const runway = monthlyBurn > 0 ? netCashPosition / monthlyBurn : null;
   const showWarning = runway !== null && runway < 6;
 
   // Build 12-month forecast starting from current date
