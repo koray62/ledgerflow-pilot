@@ -149,7 +149,8 @@ function autoDetectColumns(headers: string[]) {
 /* ─────────────────────────────────── COMPONENT ─────────────────────────────────── */
 
 export default function BankAccounts() {
-  const { tenantId } = useTenant();
+  const { tenantId, defaultCurrency } = useTenant();
+  const fmt = (n: number) => fmtCurrency(n, defaultCurrency);
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
