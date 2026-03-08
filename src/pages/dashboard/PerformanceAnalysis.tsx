@@ -804,6 +804,7 @@ const PerformanceAnalysis = () => {
           </div>
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 };
