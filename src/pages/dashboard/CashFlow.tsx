@@ -5,7 +5,8 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer
 } from "recharts";
-import { AlertTriangle, TrendingUp, DollarSign, Clock } from "lucide-react";
+import { AlertTriangle, TrendingUp, DollarSign, Clock, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
