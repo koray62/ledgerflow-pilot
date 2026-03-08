@@ -209,7 +209,6 @@ const CashFlow = () => {
     const rangeEnd = endDate ?? new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 12, 0);
     const firstMonth = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
     const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
-    const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const months: { month: string; label: string; start: Date; end: Date }[] = [];
