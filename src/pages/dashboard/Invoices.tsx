@@ -283,6 +283,7 @@ const Invoices = () => {
     const errs: string[] = [];
     if (!customerId) errs.push("Select a customer");
     if (!dueDate) errs.push("Due date is required");
+    if (invoiceDate && dueDate && new Date(invoiceDate) > new Date(dueDate)) errs.push("Invoice date cannot be later than the due date");
     if (invoiceDate && isDateInClosedYear(invoiceDate)) errs.push("Cannot create invoices in a closed fiscal year.");
     if (lines.length === 0) errs.push("Add at least one line item");
     lines.forEach((l, i) => {
