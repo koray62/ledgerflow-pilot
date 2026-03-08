@@ -1000,6 +1000,44 @@ export type Database = {
           },
         ]
       }
+      tenant_permissions: {
+        Row: {
+          allowed: boolean
+          created_at: string
+          id: string
+          permission_key: string
+          role: Database["public"]["Enums"]["app_role"]
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          allowed?: boolean
+          created_at?: string
+          id?: string
+          permission_key: string
+          role: Database["public"]["Enums"]["app_role"]
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          allowed?: boolean
+          created_at?: string
+          id?: string
+          permission_key?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_permissions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenants: {
         Row: {
           address: string | null
@@ -1206,6 +1244,10 @@ export type Database = {
     }
     Functions: {
       can_edit_tenant_data: { Args: { _tenant_id: string }; Returns: boolean }
+      has_permission: {
+        Args: { _permission_key: string; _tenant_id: string }
+        Returns: boolean
+      }
       has_tenant_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1215,6 +1257,10 @@ export type Database = {
       }
       is_tenant_member: { Args: { _tenant_id: string }; Returns: boolean }
       is_tenant_owner: { Args: { _tenant_id: string }; Returns: boolean }
+      seed_tenant_permissions: {
+        Args: { _tenant_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       account_type: "asset" | "liability" | "equity" | "revenue" | "expense"
