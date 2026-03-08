@@ -60,6 +60,7 @@ const TAX_RATE = 0.2;
 /* ═══════════════════════════ COMPONENT ═══════════════════════════ */
 const Invoices = () => {
   const { tenantId, defaultCurrency } = useTenant();
+  const { user } = useAuth();
   const fmt = (n: number) => fmtCurrency(n, defaultCurrency);
   const qc = useQueryClient();
   const { toast } = useToast();
