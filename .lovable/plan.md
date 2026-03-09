@@ -1,63 +1,94 @@
+## Multi-Currency Support — IMPLEMENTED
 
-## Plan: Add Delete Account Feature
+### Supported Currencies
+USD, EUR, AED (UAE Dirham), TRY (Turkish Lira), SAR (Saudi Riyal)
+
+### Database Changes ✅
+- `tenants.default_currency` (text, NOT NULL, default 'USD')
+- `journal_entries.currency` (text, NOT NULL, default 'USD')
+- `invoices.currency` (text, NOT NULL, default 'USD')
+- `bank_accounts.currency` already existed
+
+### Shared Utility (`src/lib/utils.ts`) ✅
+- `SUPPORTED_CURRENCIES` constant with code, label, symbol
+- `formatCurrency(amount, currency, options?)` using `Intl.NumberFormat`
+- `CurrencyCode` type
+
+### Tenant Context (`useTenant.tsx`) ✅
+- `defaultCurrency` exposed from tenant record
+
+### Settings (`DashboardSettings.tsx`) ✅
+- Default Currency dropdown in Organization section
+
+### Form Currency Selectors ✅
+- **JournalEntryForm**: Currency dropdown, defaults to tenant currency, saves to `journal_entries.currency`
+- **Invoices**: Currency dropdown in create/edit dialog, saves to `invoices.currency`
+- **BankAccounts**: Select dropdown with all 5 currencies (replaced text input)
+
+### Financial Statements ✅
+All reports use `formatCurrency(amount, defaultCurrency)`:
+- Balance Sheet, Income Statement, Cash Flow, Performance Analysis, Dashboard Overview
+- Chart of Accounts, Journal Entries, OCR Upload
+- Bank account balances display in account's own currency
+
+### Design Decision: Single-Currency Reporting
+- Financial statements report in tenant's default currency only
+- `currency` field on journal_entries/invoices is metadata for the transaction currency
+- Journal line debits/credits are always in the functional (reporting) currency
+
+### Future Enhancements (out of scope)
+- Multi-currency FX rate table
+- Unrealized gain/loss calculations
+- Currency revaluation entries
+- Currency badge on mixed-currency views
+- Bank → Journal Entry currency validation on CSV import
+
+## Dual-Mode Accounting (Cash vs Accrual Basis) — IMPLEMENTED
 
 ### Overview
-Add a "Delete Account" option in Settings that permanently deletes all user data and the account itself, then redirects to the login page.
+Users can choose between Cash Basis and Accrual Basis accounting. The setting affects how the Income Statement and Cash Flow reports calculate and display data.
 
-### Changes
+### Database Changes ✅
+- `tenants.accounting_basis` (text, NOT NULL, default 'accrual')
 
-**1. Create Edge Function** (`supabase/functions/delete-account/index.ts`)
-- Validate authenticated user
-- Use service role to bypass RLS
-- Find all tenants where user is owner
-- Delete data in order (respecting foreign key dependencies):
-  - `journal_lines`, `journal_entries`, `invoices`, `invoice_lines`
-  - `bank_transactions`, `bank_accounts`, `bills`, `vendors`, `customers`
-  - `documents`, `forecast_entries`, `audit_logs`, `usage_metrics`
-  - `subscriptions`, `tenant_permissions`, `user_tenant_roles`
-  - `chart_of_accounts`, `tenants`
-- Delete files from `tenant-documents` storage bucket
-- Delete user profile
-- Delete auth user via `auth.admin.deleteUser()`
-- Return success confirmation
+### Tenant Context (`useTenant.tsx`) ✅
+- `accountingBasis` exposed from tenant record
 
-**2. Update Settings Page** (`src/pages/dashboard/DashboardSettings.tsx`)
-- Add "Delete Account" section in Danger Zone card
-- Add confirmation dialog with strong warning
-- On confirm:
-  - Call the `delete-account` edge function
-  - Show success toast message
-  - Sign out the user
-  - Navigate to `/login`
+### Settings (`DashboardSettings.tsx`) ✅
+- Accounting Method RadioGroup with descriptions for each basis
 
-### Technical Details
+### Income Statement (`IncomeStatement.tsx`) ✅
+- **Accrual Mode**: Standard journal entry date filtering, all revenue/expense accounts
+- **Cash Mode**: Only considers journal entries touching cash accounts (1000 descendants), attributes amounts to counter-party revenue/expense accounts, excludes AR (1100) and Deferred Revenue (2200) from display
+- Basis badge displayed in header
 
-```text
-Deletion Order (respecting FK constraints):
-┌─────────────────────────────────────────┐
-│ 1. journal_lines (FK → journal_entries) │
-│ 2. journal_entries                      │
-│ 3. invoice_lines (FK → invoices)        │
-│ 4. invoices                             │
-│ 5. bank_transactions                    │
-│ 6. bank_accounts                        │
-│ 7. bills                                │
-│ 8. vendors, customers                   │
-│ 9. documents, forecast_entries          │
-│ 10. audit_logs, usage_metrics           │
-│ 11. subscriptions, tenant_permissions   │
-│ 12. user_tenant_roles                   │
-│ 13. chart_of_accounts                   │
-│ 14. tenants                             │
-│ 15. profiles                            │
-│ 16. auth.users (admin API)              │
-└─────────────────────────────────────────┘
-```
+### Cash Flow (`CashFlow.tsx`) ✅
+- **Accrual Mode (Indirect Method)**: Starts with Net Income, adjusts for ΔAR and ΔDeferred Revenue, shows reconciliation table
+- **Cash Mode**: Simplified direct cash movements, hides AR/AP adjustment sections and outstanding invoices/bills projections
+- Basis badge displayed in header
+- Metrics cards change based on mode
 
-Edge function config in `supabase/config.toml`:
-```toml
-[functions.delete-account]
-verify_jwt = false
-```
+### Key Validation Rules
+- Cash Basis P&L never shows AR or Deferred Revenue balances
+- Accrual Basis uses journal entry date for filtering
+- Cash Basis uses cash-account-touching entries only
 
-UI will require owner permission check before showing the delete button.
+## Accounting Help Chatbot — IMPLEMENTED
+
+### Overview
+Floating AI chatbot on all dashboard pages. Reads tenant currency + CoA from database, uses Gemini to provide accounting guidance tailored to the correct standards (TFRS, SOCPA, US GAAP, IFRS).
+
+### Files
+- `supabase/functions/accounting-help/index.ts` — Edge function with dynamic system prompt
+- `src/components/dashboard/HelpChatbot.tsx` — Floating chat UI with streaming
+- `src/components/dashboard/DashboardLayout.tsx` — Integration point
+
+### Features
+- Currency → standard mapping (TRY→TFRS, SAR→SOCPA, USD→US GAAP, EUR/AED→IFRS)
+- Full CoA tree passed as context so model references real account codes
+- Tenant name, fiscal year end, and industry included in system prompt
+- Can recommend adding/editing/deleting CoA items and journal entries
+- SSE streaming with token-by-token rendering
+- Markdown rendering via react-markdown
+- Ephemeral conversation (resets on close)
+- Quick-start suggestion chips

@@ -10,11 +10,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, AlertTriangle, Upload, X, Lock } from "lucide-react";
 import { useTenant } from "@/hooks/useTenant";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { SUPPORTED_CURRENCIES } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useNavigate } from "react-router-dom";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -22,8 +24,10 @@ const MONTHS = [
 ];
 
 const DashboardSettings = () => {
-  const { tenantId } = useTenant();
+  const { tenantId, role } = useTenant();
   const { can } = usePermissions();
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
@@ -39,6 +43,7 @@ const DashboardSettings = () => {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [closingYear, setClosingYear] = useState(false);
   const [selectedFY, setSelectedFY] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const { data: tenant, isLoading } = useQuery({
     queryKey: ["tenant-settings", tenantId],
     enabled: !!tenantId,
@@ -575,57 +580,114 @@ const DashboardSettings = () => {
               <AlertTriangle className="h-4 w-4" /> Danger Zone
             </h3>
             <Separator className="my-4" />
-            <div className="space-y-3">
+            <div className="space-y-6">
               <div>
                 <p className="text-sm font-medium text-foreground">Seed Test Data</p>
                 <p className="text-xs text-muted-foreground">
                   Delete all journal entries, bank transactions, and documents, then seed 4 years of dummy data for testing.
                 </p>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" disabled={seeding} className="mt-2">
+                      {seeding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {seeding ? "Seeding…" : "Seed Test Data"}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete all existing journal entries, journal lines, bank transactions, and documents for this organization, then create ~700+ dummy entries spanning 2022–2025.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        onClick={async () => {
+                          if (!tenantId) return;
+                          setSeeding(true);
+                          try {
+                            const { data, error } = await supabase.functions.invoke("seed-test-data", {
+                              body: { tenantId },
+                            });
+                            if (error) throw error;
+                            if (data?.error) throw new Error(data.error);
+                            toast({
+                              title: "Test data seeded",
+                              description: `Created ${data.entries} journal entries, ${data.lines} lines, and ${data.bankTransactions} bank transactions.`,
+                            });
+                            queryClient.invalidateQueries();
+                          } catch (err: any) {
+                            toast({ title: "Error", description: err.message, variant: "destructive" });
+                          } finally {
+                            setSeeding(false);
+                          }
+                        }}
+                      >
+                        Yes, delete & seed
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" disabled={seeding}>
-                    {seeding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {seeding ? "Seeding…" : "Seed Test Data"}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will permanently delete all existing journal entries, journal lines, bank transactions, and documents for this organization, then create ~700+ dummy entries spanning 2022–2025.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      onClick={async () => {
-                        if (!tenantId) return;
-                        setSeeding(true);
-                        try {
-                          const { data, error } = await supabase.functions.invoke("seed-test-data", {
-                            body: { tenantId },
-                          });
-                          if (error) throw error;
-                          if (data?.error) throw new Error(data.error);
-                          toast({
-                            title: "Test data seeded",
-                            description: `Created ${data.entries} journal entries, ${data.lines} lines, and ${data.bankTransactions} bank transactions.`,
-                          });
-                          queryClient.invalidateQueries();
-                        } catch (err: any) {
-                          toast({ title: "Error", description: err.message, variant: "destructive" });
-                        } finally {
-                          setSeeding(false);
-                        }
-                      }}
-                    >
-                      Yes, delete & seed
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+
+              {role === 'owner' && (
+                <div>
+                  <p className="text-sm font-medium text-destructive">Delete Account</p>
+                  <p className="text-xs text-muted-foreground">
+                    Permanently delete your account and all associated data. This action cannot be undone.
+                  </p>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" disabled={deletingAccount} className="mt-2">
+                        {deletingAccount && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {deletingAccount ? "Deleting…" : "Delete Account"}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Account?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will permanently delete your account, all tenants you own, and all associated data including journal entries, invoices, bank transactions, documents, and files. This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={async () => {
+                            setDeletingAccount(true);
+                            try {
+                              const { data, error } = await supabase.functions.invoke("delete-account");
+                              if (error) throw error;
+                              if (data?.error) throw new Error(data.error);
+                              
+                              toast({
+                                title: "Account deleted",
+                                description: "Your account and all data have been permanently deleted.",
+                              });
+                              
+                              // Sign out and redirect to login
+                              await signOut();
+                              navigate("/login");
+                            } catch (err: any) {
+                              toast({ 
+                                title: "Error", 
+                                description: err.message || "Failed to delete account", 
+                                variant: "destructive" 
+                              });
+                              setDeletingAccount(false);
+                            }
+                          }}
+                        >
+                          Yes, delete my account
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
