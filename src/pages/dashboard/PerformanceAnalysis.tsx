@@ -387,7 +387,7 @@ const PerformanceAnalysis = () => {
       description: "Net Income / Revenue",
       icon: Percent,
       values: yearlyData.map((d) => ({ year: d.year, value: d.netProfitMargin })),
-      format: (n: number) => `${n.toFixed(1)}%`,
+      format: (n: number | null) => n !== null ? `${n.toFixed(1)}%` : "—",
       good: (n: number | null) => n !== null && n > 0,
     },
     {
@@ -395,7 +395,7 @@ const PerformanceAnalysis = () => {
       description: "Expenses / Revenue",
       icon: TrendingDown,
       values: yearlyData.map((d) => ({ year: d.year, value: d.expenseRatio })),
-      format: (n: number) => `${n.toFixed(1)}%`,
+      format: (n: number | null) => n !== null ? `${n.toFixed(1)}%` : "—",
       good: (n: number | null) => n !== null && n < 100,
     },
     {
@@ -419,7 +419,7 @@ const PerformanceAnalysis = () => {
       description: "Monthly Avg Expenses",
       icon: DollarSign,
       values: yearlyData.map((d) => ({ year: d.year, value: d.monthlyAvgExpenses })),
-      format: (n: number) => fmt(n),
+      format: (n: number | null) => n !== null ? fmt(n) : "—",
       good: () => true,
     },
   ];
