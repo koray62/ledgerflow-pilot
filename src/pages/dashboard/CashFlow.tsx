@@ -347,7 +347,7 @@ const CashFlow = () => {
       cursor.setMonth(cursor.getMonth() + 1);
     }
 
-    const result: { month: string; inflow: number; outflow: number; balance: number }[] = [
+    const result: { month: string; inflow: number; outflow: number; balance: number; start?: Date; end?: Date; isPast?: boolean }[] = [
       { month: "Opening", inflow: 0, outflow: 0, balance: openingCashBalance },
     ];
 
@@ -413,11 +413,147 @@ const CashFlow = () => {
       }
 
       running += inflow - outflow;
-      result.push({ month: m.month, inflow, outflow, balance: running });
+      result.push({ month: m.month, inflow, outflow, balance: running, start: m.start, end: m.end, isPast });
     });
 
     return result;
   })();
+
+  // Build detail items for the expanded month
+  const expandedDetails = useMemo(() => {
+    if (expandedMonth === null || expandedMonth < 0 || expandedMonth >= chartData.length) return [];
+    const row = chartData[expandedMonth];
+    if (!row.start || !row.end) return []; // "Opening" row
+
+    const items: { date: string; description: string; account: string; type: "inflow" | "outflow"; amount: number; source: string }[] = [];
+    const mStart = row.start;
+    const mEnd = row.end;
+    const currentMonthStart2 = new Date(now.getFullYear(), now.getMonth(), 1);
+    const isPast = mStart < currentMonthStart2;
+
+    if (isPast) {
+      // Historical: show actual cash journal lines
+      cashJournalLines.forEach((line) => {
+        const entryDate = new Date(line.journal_entries.entry_date);
+        if (entryDate >= mStart && entryDate <= mEnd) {
+          const debit = Number(line.debit);
+          const credit = Number(line.credit);
+          if (debit > 0) {
+            items.push({
+              date: line.journal_entries.entry_date,
+              description: line.description || line.journal_entries.description,
+              account: line.chart_of_accounts.name,
+              type: "inflow",
+              amount: debit,
+              source: `JE ${line.journal_entries.entry_number}`,
+            });
+          }
+          if (credit > 0) {
+            items.push({
+              date: line.journal_entries.entry_date,
+              description: line.description || line.journal_entries.description,
+              account: line.chart_of_accounts.name,
+              type: "outflow",
+              amount: credit,
+              source: `JE ${line.journal_entries.entry_number}`,
+            });
+          }
+        }
+      });
+    } else {
+      // Future: show projected items
+      if (!isCashBasis) {
+        outstandingInvoices.forEach((inv) => {
+          const due = new Date(inv.due_date);
+          if (due >= mStart && due <= mEnd) {
+            const outstanding = Number(inv.total_amount) - Number(inv.amount_paid);
+            if (outstanding > 0) {
+              items.push({
+                date: inv.due_date,
+                description: `Invoice payment expected`,
+                account: "Accounts Receivable",
+                type: "inflow",
+                amount: outstanding,
+                source: `Invoice (${inv.status})`,
+              });
+            }
+          }
+        });
+
+        outstandingBills.forEach((bill) => {
+          const due = new Date(bill.due_date);
+          if (due >= mStart && due <= mEnd) {
+            const outstanding = Number(bill.total_amount) - Number(bill.amount_paid);
+            if (outstanding > 0) {
+              items.push({
+                date: bill.due_date,
+                description: `Bill payment due`,
+                account: "Accounts Payable",
+                type: "outflow",
+                amount: outstanding,
+                source: `Bill (${bill.status})`,
+              });
+            }
+          }
+        });
+      }
+
+      forecasts.forEach((f) => {
+        const fd = new Date(f.forecast_date);
+        const amt = Math.abs(Number(f.amount) || 0);
+        let applies = false;
+        if (f.is_recurring && f.recurrence_interval === "monthly") {
+          const forecastStartMonth = new Date(fd.getFullYear(), fd.getMonth(), 1);
+          const currentEvalMonth = new Date(mStart.getFullYear(), mStart.getMonth(), 1);
+          applies = currentEvalMonth >= forecastStartMonth;
+        } else {
+          applies = fd >= mStart && fd <= mEnd;
+        }
+        if (applies && amt > 0) {
+          items.push({
+            date: f.forecast_date,
+            description: f.description,
+            account: f.category ?? "Forecast",
+            type: f.category === "expense" ? "outflow" : "inflow",
+            amount: amt,
+            source: f.is_recurring ? "Recurring forecast" : "Forecast",
+          });
+        }
+      });
+
+      futureCashJournalLines.forEach((line) => {
+        const entryDate = new Date(line.journal_entries.entry_date);
+        if (entryDate >= mStart && entryDate <= mEnd) {
+          const debit = Number(line.debit);
+          const credit = Number(line.credit);
+          if (debit > 0) {
+            items.push({
+              date: line.journal_entries.entry_date,
+              description: line.description || line.journal_entries.description,
+              account: line.chart_of_accounts.name,
+              type: "inflow",
+              amount: debit,
+              source: `JE ${line.journal_entries.entry_number}`,
+            });
+          }
+          if (credit > 0) {
+            items.push({
+              date: line.journal_entries.entry_date,
+              description: line.description || line.journal_entries.description,
+              account: line.chart_of_accounts.name,
+              type: "outflow",
+              amount: credit,
+              source: `JE ${line.journal_entries.entry_number}`,
+            });
+          }
+        }
+      });
+    }
+
+    // Sort by date
+    items.sort((a, b) => a.date.localeCompare(b.date));
+    return items;
+  }, [expandedMonth, chartData, cashJournalLines, futureCashJournalLines, outstandingInvoices, outstandingBills, forecasts, isCashBasis, now]);
 
   const metrics = isCashBasis
     ? [
