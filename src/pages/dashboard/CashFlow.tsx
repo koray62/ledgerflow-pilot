@@ -747,18 +747,85 @@ const CashFlow = () => {
               <tbody>
                 {chartData.map((row, i) => {
                   const net = row.inflow - row.outflow;
+                  const isOpen = row.month === "Opening";
+                  const isExpanded = expandedMonth === i;
+                  const hasActivity = row.inflow > 0 || row.outflow > 0;
                   return (
-                    <tr key={i} className="border-b border-border/50 transition-colors hover:bg-muted/50">
-                      <td className="py-2.5 font-medium text-foreground">{row.month}</td>
-                      <td className="py-2.5 text-right font-mono text-green-600">{formatCurrency(row.inflow)}</td>
-                      <td className="py-2.5 text-right font-mono text-destructive">{formatCurrency(row.outflow)}</td>
-                      <td className={`py-2.5 text-right font-mono ${net < 0 ? "text-destructive" : "text-foreground"}`}>
-                        {net < 0 ? `(${formatCurrency(Math.abs(net))})` : formatCurrency(net)}
-                      </td>
-                      <td className={`py-2.5 text-right font-mono font-medium ${row.balance < 0 ? "text-destructive" : "text-foreground"}`}>
-                        {row.balance < 0 ? `(${formatCurrency(Math.abs(row.balance))})` : formatCurrency(row.balance)}
-                      </td>
-                    </tr>
+                    <>
+                      <tr
+                        key={i}
+                        className={`border-b border-border/50 transition-colors ${!isOpen && hasActivity ? "cursor-pointer hover:bg-muted/50" : "hover:bg-muted/30"} ${isExpanded ? "bg-muted/50" : ""}`}
+                        onClick={() => {
+                          if (!isOpen && hasActivity) setExpandedMonth(isExpanded ? null : i);
+                        }}
+                      >
+                        <td className="py-2.5 font-medium text-foreground flex items-center gap-1.5">
+                          {!isOpen && hasActivity ? (
+                            isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                          ) : (
+                            <span className="inline-block w-3.5" />
+                          )}
+                          {row.month}
+                        </td>
+                        <td className="py-2.5 text-right font-mono text-green-600">{formatCurrency(row.inflow)}</td>
+                        <td className="py-2.5 text-right font-mono text-destructive">{formatCurrency(row.outflow)}</td>
+                        <td className={`py-2.5 text-right font-mono ${net < 0 ? "text-destructive" : "text-foreground"}`}>
+                          {net < 0 ? `(${formatCurrency(Math.abs(net))})` : formatCurrency(net)}
+                        </td>
+                        <td className={`py-2.5 text-right font-mono font-medium ${row.balance < 0 ? "text-destructive" : "text-foreground"}`}>
+                          {row.balance < 0 ? `(${formatCurrency(Math.abs(row.balance))})` : formatCurrency(row.balance)}
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${i}-detail`}>
+                          <td colSpan={5} className="p-0">
+                            <div className="bg-muted/30 border-b border-border px-4 py-3">
+                              {expandedDetails.length === 0 ? (
+                                <p className="text-sm text-muted-foreground py-2">No detailed items for this month.</p>
+                              ) : (
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="border-b border-border/50">
+                                      <th className="pb-1.5 text-left font-medium text-muted-foreground">Date</th>
+                                      <th className="pb-1.5 text-left font-medium text-muted-foreground">Description</th>
+                                      <th className="pb-1.5 text-left font-medium text-muted-foreground">Account</th>
+                                      <th className="pb-1.5 text-left font-medium text-muted-foreground">Source</th>
+                                      <th className="pb-1.5 text-right font-medium text-muted-foreground">Inflow</th>
+                                      <th className="pb-1.5 text-right font-medium text-muted-foreground">Outflow</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {expandedDetails.map((item, j) => (
+                                      <tr key={j} className="border-b border-border/20">
+                                        <td className="py-1.5 text-foreground">{formatDisplayDate(item.date, defaultCurrency)}</td>
+                                        <td className="py-1.5 text-foreground max-w-[200px] truncate">{item.description}</td>
+                                        <td className="py-1.5 text-muted-foreground">{item.account}</td>
+                                        <td className="py-1.5 text-muted-foreground">{item.source}</td>
+                                        <td className="py-1.5 text-right font-mono text-green-600">
+                                          {item.type === "inflow" ? formatCurrency(item.amount) : ""}
+                                        </td>
+                                        <td className="py-1.5 text-right font-mono text-destructive">
+                                          {item.type === "outflow" ? formatCurrency(item.amount) : ""}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    <tr className="border-t border-border bg-muted/40">
+                                      <td colSpan={4} className="py-1.5 font-semibold text-foreground">Totals</td>
+                                      <td className="py-1.5 text-right font-mono font-semibold text-green-600">
+                                        {formatCurrency(expandedDetails.filter(d => d.type === "inflow").reduce((s, d) => s + d.amount, 0))}
+                                      </td>
+                                      <td className="py-1.5 text-right font-mono font-semibold text-destructive">
+                                        {formatCurrency(expandedDetails.filter(d => d.type === "outflow").reduce((s, d) => s + d.amount, 0))}
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   );
                 })}
               </tbody>
