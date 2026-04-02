@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { format, subDays } from "date-fns";
+import { format, startOfYear } from "date-fns";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
