@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { format, subDays } from "date-fns";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -137,21 +138,25 @@ const CashFlow = () => {
     },
   });
 
-  // Fetch historical cash account journal lines with dates
+  // Fetch historical cash account journal lines with dates + details
   const { data: cashJournalLines = [] } = useQuery({
     queryKey: ["cf-cash-lines", tenantId, cashAccountIds, startStr, endStr],
     enabled: !!tenantId && cashAccountIds.length > 0,
     queryFn: async () => {
       let query = supabase
         .from("journal_lines")
-        .select("debit, credit, journal_entry_id, journal_entries!inner(entry_date)")
+        .select("debit, credit, description, account_id, journal_entry_id, journal_entries!inner(entry_date, description, entry_number), chart_of_accounts!inner(name)")
         .eq("tenant_id", tenantId!)
         .in("account_id", cashAccountIds)
         .is("deleted_at", null);
       if (startStr) query = query.gte("journal_entries.entry_date", startStr);
       if (endStr) query = query.lte("journal_entries.entry_date", endStr);
       const { data } = await query;
-      return (data ?? []) as Array<{ debit: number; credit: number; journal_entries: { entry_date: string } }>;
+      return (data ?? []) as Array<{
+        debit: number; credit: number; description: string | null; account_id: string;
+        journal_entries: { entry_date: string; description: string; entry_number: string };
+        chart_of_accounts: { name: string };
+      }>;
     },
   });
 
@@ -261,16 +266,22 @@ const CashFlow = () => {
     queryFn: async () => {
       let query = supabase
         .from("journal_lines")
-        .select("debit, credit, journal_entry_id, journal_entries!inner(entry_date)")
+        .select("debit, credit, description, account_id, journal_entry_id, journal_entries!inner(entry_date, description, entry_number), chart_of_accounts!inner(name)")
         .eq("tenant_id", tenantId!)
         .in("account_id", cashAccountIds)
         .is("deleted_at", null)
         .gte("journal_entries.entry_date", currentMonthStr);
       if (endStr) query = query.lte("journal_entries.entry_date", endStr);
       const { data } = await query;
-      return (data ?? []) as Array<{ debit: number; credit: number; journal_entries: { entry_date: string } }>;
+      return (data ?? []) as Array<{
+        debit: number; credit: number; description: string | null; account_id: string;
+        journal_entries: { entry_date: string; description: string; entry_number: string };
+        chart_of_accounts: { name: string };
+      }>;
     },
   });
+
+  const [expandedMonth, setExpandedMonth] = useState<number | null>(null);
 
   // Outstanding invoices
   const { data: outstandingInvoices = [] } = useQuery({
@@ -336,7 +347,7 @@ const CashFlow = () => {
       cursor.setMonth(cursor.getMonth() + 1);
     }
 
-    const result: { month: string; inflow: number; outflow: number; balance: number }[] = [
+    const result: { month: string; inflow: number; outflow: number; balance: number; start?: Date; end?: Date; isPast?: boolean }[] = [
       { month: "Opening", inflow: 0, outflow: 0, balance: openingCashBalance },
     ];
 
@@ -402,11 +413,147 @@ const CashFlow = () => {
       }
 
       running += inflow - outflow;
-      result.push({ month: m.month, inflow, outflow, balance: running });
+      result.push({ month: m.month, inflow, outflow, balance: running, start: m.start, end: m.end, isPast });
     });
 
     return result;
   })();
+
+  // Build detail items for the expanded month
+  const expandedDetails = useMemo(() => {
+    if (expandedMonth === null || expandedMonth < 0 || expandedMonth >= chartData.length) return [];
+    const row = chartData[expandedMonth];
+    if (!row.start || !row.end) return []; // "Opening" row
+
+    const items: { date: string; description: string; account: string; type: "inflow" | "outflow"; amount: number; source: string }[] = [];
+    const mStart = row.start;
+    const mEnd = row.end;
+    const currentMonthStart2 = new Date(now.getFullYear(), now.getMonth(), 1);
+    const isPast = mStart < currentMonthStart2;
+
+    if (isPast) {
+      // Historical: show actual cash journal lines
+      cashJournalLines.forEach((line) => {
+        const entryDate = new Date(line.journal_entries.entry_date);
+        if (entryDate >= mStart && entryDate <= mEnd) {
+          const debit = Number(line.debit);
+          const credit = Number(line.credit);
+          if (debit > 0) {
+            items.push({
+              date: line.journal_entries.entry_date,
+              description: line.description || line.journal_entries.description,
+              account: line.chart_of_accounts.name,
+              type: "inflow",
+              amount: debit,
+              source: `JE ${line.journal_entries.entry_number}`,
+            });
+          }
+          if (credit > 0) {
+            items.push({
+              date: line.journal_entries.entry_date,
+              description: line.description || line.journal_entries.description,
+              account: line.chart_of_accounts.name,
+              type: "outflow",
+              amount: credit,
+              source: `JE ${line.journal_entries.entry_number}`,
+            });
+          }
+        }
+      });
+    } else {
+      // Future: show projected items
+      if (!isCashBasis) {
+        outstandingInvoices.forEach((inv) => {
+          const due = new Date(inv.due_date);
+          if (due >= mStart && due <= mEnd) {
+            const outstanding = Number(inv.total_amount) - Number(inv.amount_paid);
+            if (outstanding > 0) {
+              items.push({
+                date: inv.due_date,
+                description: `Invoice payment expected`,
+                account: "Accounts Receivable",
+                type: "inflow",
+                amount: outstanding,
+                source: `Invoice (${inv.status})`,
+              });
+            }
+          }
+        });
+
+        outstandingBills.forEach((bill) => {
+          const due = new Date(bill.due_date);
+          if (due >= mStart && due <= mEnd) {
+            const outstanding = Number(bill.total_amount) - Number(bill.amount_paid);
+            if (outstanding > 0) {
+              items.push({
+                date: bill.due_date,
+                description: `Bill payment due`,
+                account: "Accounts Payable",
+                type: "outflow",
+                amount: outstanding,
+                source: `Bill (${bill.status})`,
+              });
+            }
+          }
+        });
+      }
+
+      forecasts.forEach((f) => {
+        const fd = new Date(f.forecast_date);
+        const amt = Math.abs(Number(f.amount) || 0);
+        let applies = false;
+        if (f.is_recurring && f.recurrence_interval === "monthly") {
+          const forecastStartMonth = new Date(fd.getFullYear(), fd.getMonth(), 1);
+          const currentEvalMonth = new Date(mStart.getFullYear(), mStart.getMonth(), 1);
+          applies = currentEvalMonth >= forecastStartMonth;
+        } else {
+          applies = fd >= mStart && fd <= mEnd;
+        }
+        if (applies && amt > 0) {
+          items.push({
+            date: f.forecast_date,
+            description: f.description,
+            account: f.category ?? "Forecast",
+            type: f.category === "expense" ? "outflow" : "inflow",
+            amount: amt,
+            source: f.is_recurring ? "Recurring forecast" : "Forecast",
+          });
+        }
+      });
+
+      futureCashJournalLines.forEach((line) => {
+        const entryDate = new Date(line.journal_entries.entry_date);
+        if (entryDate >= mStart && entryDate <= mEnd) {
+          const debit = Number(line.debit);
+          const credit = Number(line.credit);
+          if (debit > 0) {
+            items.push({
+              date: line.journal_entries.entry_date,
+              description: line.description || line.journal_entries.description,
+              account: line.chart_of_accounts.name,
+              type: "inflow",
+              amount: debit,
+              source: `JE ${line.journal_entries.entry_number}`,
+            });
+          }
+          if (credit > 0) {
+            items.push({
+              date: line.journal_entries.entry_date,
+              description: line.description || line.journal_entries.description,
+              account: line.chart_of_accounts.name,
+              type: "outflow",
+              amount: credit,
+              source: `JE ${line.journal_entries.entry_number}`,
+            });
+          }
+        }
+      });
+    }
+
+    // Sort by date
+    items.sort((a, b) => a.date.localeCompare(b.date));
+    return items;
+  }, [expandedMonth, chartData, cashJournalLines, futureCashJournalLines, outstandingInvoices, outstandingBills, forecasts, isCashBasis, now]);
 
   const metrics = isCashBasis
     ? [
@@ -600,18 +747,85 @@ const CashFlow = () => {
               <tbody>
                 {chartData.map((row, i) => {
                   const net = row.inflow - row.outflow;
+                  const isOpen = row.month === "Opening";
+                  const isExpanded = expandedMonth === i;
+                  const hasActivity = row.inflow > 0 || row.outflow > 0;
                   return (
-                    <tr key={i} className="border-b border-border/50 transition-colors hover:bg-muted/50">
-                      <td className="py-2.5 font-medium text-foreground">{row.month}</td>
-                      <td className="py-2.5 text-right font-mono text-green-600">{formatCurrency(row.inflow)}</td>
-                      <td className="py-2.5 text-right font-mono text-destructive">{formatCurrency(row.outflow)}</td>
-                      <td className={`py-2.5 text-right font-mono ${net < 0 ? "text-destructive" : "text-foreground"}`}>
-                        {net < 0 ? `(${formatCurrency(Math.abs(net))})` : formatCurrency(net)}
-                      </td>
-                      <td className={`py-2.5 text-right font-mono font-medium ${row.balance < 0 ? "text-destructive" : "text-foreground"}`}>
-                        {row.balance < 0 ? `(${formatCurrency(Math.abs(row.balance))})` : formatCurrency(row.balance)}
-                      </td>
-                    </tr>
+                    <>
+                      <tr
+                        key={i}
+                        className={`border-b border-border/50 transition-colors ${!isOpen && hasActivity ? "cursor-pointer hover:bg-muted/50" : "hover:bg-muted/30"} ${isExpanded ? "bg-muted/50" : ""}`}
+                        onClick={() => {
+                          if (!isOpen && hasActivity) setExpandedMonth(isExpanded ? null : i);
+                        }}
+                      >
+                        <td className="py-2.5 font-medium text-foreground flex items-center gap-1.5">
+                          {!isOpen && hasActivity ? (
+                            isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                          ) : (
+                            <span className="inline-block w-3.5" />
+                          )}
+                          {row.month}
+                        </td>
+                        <td className="py-2.5 text-right font-mono text-green-600">{formatCurrency(row.inflow)}</td>
+                        <td className="py-2.5 text-right font-mono text-destructive">{formatCurrency(row.outflow)}</td>
+                        <td className={`py-2.5 text-right font-mono ${net < 0 ? "text-destructive" : "text-foreground"}`}>
+                          {net < 0 ? `(${formatCurrency(Math.abs(net))})` : formatCurrency(net)}
+                        </td>
+                        <td className={`py-2.5 text-right font-mono font-medium ${row.balance < 0 ? "text-destructive" : "text-foreground"}`}>
+                          {row.balance < 0 ? `(${formatCurrency(Math.abs(row.balance))})` : formatCurrency(row.balance)}
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${i}-detail`}>
+                          <td colSpan={5} className="p-0">
+                            <div className="bg-muted/30 border-b border-border px-4 py-3">
+                              {expandedDetails.length === 0 ? (
+                                <p className="text-sm text-muted-foreground py-2">No detailed items for this month.</p>
+                              ) : (
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="border-b border-border/50">
+                                      <th className="pb-1.5 text-left font-medium text-muted-foreground">Date</th>
+                                      <th className="pb-1.5 text-left font-medium text-muted-foreground">Description</th>
+                                      <th className="pb-1.5 text-left font-medium text-muted-foreground">Account</th>
+                                      <th className="pb-1.5 text-left font-medium text-muted-foreground">Source</th>
+                                      <th className="pb-1.5 text-right font-medium text-muted-foreground">Inflow</th>
+                                      <th className="pb-1.5 text-right font-medium text-muted-foreground">Outflow</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {expandedDetails.map((item, j) => (
+                                      <tr key={j} className="border-b border-border/20">
+                                        <td className="py-1.5 text-foreground">{formatDisplayDate(item.date, defaultCurrency)}</td>
+                                        <td className="py-1.5 text-foreground max-w-[200px] truncate">{item.description}</td>
+                                        <td className="py-1.5 text-muted-foreground">{item.account}</td>
+                                        <td className="py-1.5 text-muted-foreground">{item.source}</td>
+                                        <td className="py-1.5 text-right font-mono text-green-600">
+                                          {item.type === "inflow" ? formatCurrency(item.amount) : ""}
+                                        </td>
+                                        <td className="py-1.5 text-right font-mono text-destructive">
+                                          {item.type === "outflow" ? formatCurrency(item.amount) : ""}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    <tr className="border-t border-border bg-muted/40">
+                                      <td colSpan={4} className="py-1.5 font-semibold text-foreground">Totals</td>
+                                      <td className="py-1.5 text-right font-mono font-semibold text-green-600">
+                                        {formatCurrency(expandedDetails.filter(d => d.type === "inflow").reduce((s, d) => s + d.amount, 0))}
+                                      </td>
+                                      <td className="py-1.5 text-right font-mono font-semibold text-destructive">
+                                        {formatCurrency(expandedDetails.filter(d => d.type === "outflow").reduce((s, d) => s + d.amount, 0))}
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   );
                 })}
               </tbody>
