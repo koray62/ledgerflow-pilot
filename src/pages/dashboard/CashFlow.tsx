@@ -266,16 +266,22 @@ const CashFlow = () => {
     queryFn: async () => {
       let query = supabase
         .from("journal_lines")
-        .select("debit, credit, journal_entry_id, journal_entries!inner(entry_date)")
+        .select("debit, credit, description, account_id, journal_entry_id, journal_entries!inner(entry_date, description, entry_number), chart_of_accounts!inner(name)")
         .eq("tenant_id", tenantId!)
         .in("account_id", cashAccountIds)
         .is("deleted_at", null)
         .gte("journal_entries.entry_date", currentMonthStr);
       if (endStr) query = query.lte("journal_entries.entry_date", endStr);
       const { data } = await query;
-      return (data ?? []) as Array<{ debit: number; credit: number; journal_entries: { entry_date: string } }>;
+      return (data ?? []) as Array<{
+        debit: number; credit: number; description: string | null; account_id: string;
+        journal_entries: { entry_date: string; description: string; entry_number: string };
+        chart_of_accounts: { name: string };
+      }>;
     },
   });
+
+  const [expandedMonth, setExpandedMonth] = useState<number | null>(null);
 
   // Outstanding invoices
   const { data: outstandingInvoices = [] } = useQuery({
