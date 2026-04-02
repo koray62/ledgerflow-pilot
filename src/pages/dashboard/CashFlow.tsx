@@ -21,7 +21,7 @@ const CashFlow = () => {
   const { tenantId, defaultCurrency, accountingBasis } = useTenant();
   const isCashBasis = accountingBasis === "cash";
   const formatCurrency = (val: number) => fmtCurrency(val, defaultCurrency, { minimumFractionDigits: 0 });
-  const [startDate, setStartDate] = useState<Date | undefined>(subDays(new Date(), 30));
+  const [startDate, setStartDate] = useState<Date | undefined>(startOfYear(new Date()));
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
 
   const startStr = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
