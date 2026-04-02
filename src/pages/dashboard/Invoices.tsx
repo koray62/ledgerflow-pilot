@@ -52,7 +52,16 @@ const statusColors: Record<string, string> = {
   sent: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   paid: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
   overdue: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  late: "bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100 font-semibold",
   cancelled: "bg-muted text-muted-foreground line-through",
+};
+
+/** Returns display status: "late" if sent/overdue and past due date */
+const getDisplayStatus = (inv: { status: string; due_date: string }) => {
+  if ((inv.status === "sent" || inv.status === "overdue") && new Date(inv.due_date) < new Date()) {
+    return "late";
+  }
+  return inv.status;
 };
 
 // fmt is now defined inside component to use defaultCurrency
