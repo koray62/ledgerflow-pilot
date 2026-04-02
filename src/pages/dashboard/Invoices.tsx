@@ -759,9 +759,14 @@ const Invoices = () => {
                     <TableCell>{formatDisplayDate(inv.invoice_date, defaultCurrency)}</TableCell>
                     <TableCell>{formatDisplayDate(inv.due_date, defaultCurrency)}</TableCell>
                     <TableCell>
-                      <Badge className={statusColors[inv.status] ?? ""} variant="secondary">
-                        {inv.status}
-                      </Badge>
+                      {(() => {
+                        const ds = getDisplayStatus(inv);
+                        return (
+                          <Badge className={statusColors[ds] ?? ""} variant="secondary">
+                            {ds}
+                          </Badge>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-right font-mono">{fmt(Number(inv.total_amount), inv.currency)}</TableCell>
                     <TableCell className="text-right space-x-1">
