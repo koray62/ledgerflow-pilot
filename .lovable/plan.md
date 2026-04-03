@@ -1,94 +1,48 @@
-## Multi-Currency Support — IMPLEMENTED
+## Plan: Fix Three Issues — Cash Flow Double-Count, Invoice Filter, Accrual Revenue
 
-### Supported Currencies
-USD, EUR, AED (UAE Dirham), TRY (Turkish Lira), SAR (Saudi Riyal)
+### Issue 1: Recurring expense double-counted in first month (CashFlow.tsx)
 
-### Database Changes ✅
-- `tenants.default_currency` (text, NOT NULL, default 'USD')
-- `journal_entries.currency` (text, NOT NULL, default 'USD')
-- `invoices.currency` (text, NOT NULL, default 'USD')
-- `bank_accounts.currency` already existed
+**Root cause**: When a recurring journal entry is created, the system creates both a `forecast_entry` (for future months) AND a `journal_entry` for the current month. In the cash flow's future-month logic, both `futureCashJournalLines` and `forecasts` are iterated — so the first month gets the amount from both sources.
 
-### Shared Utility (`src/lib/utils.ts`) ✅
-- `SUPPORTED_CURRENCIES` constant with code, label, symbol
-- `formatCurrency(amount, currency, options?)` using `Intl.NumberFormat`
-- `CurrencyCode` type
+**Fix**: In the future-month block (~lines 386-412), for each forecast that is recurring and monthly, check if a corresponding journal entry already exists in `futureCashJournalLines` for that month. If it does, skip the forecast to avoid double-counting. This can be done by checking if a journal line with a matching description/amount exists in the same month before applying the forecast.
 
-### Tenant Context (`useTenant.tsx`) ✅
-- `defaultCurrency` exposed from tenant record
+Alternative simpler approach: for the forecast start month specifically, skip the recurring forecast since the actual journal entry already covers it.
 
-### Settings (`DashboardSettings.tsx`) ✅
-- Default Currency dropdown in Organization section
+### Issue 2: "Overdue" filter should include "late" invoices (Invoices.tsx)
 
-### Form Currency Selectors ✅
-- **JournalEntryForm**: Currency dropdown, defaults to tenant currency, saves to `journal_entries.currency`
-- **Invoices**: Currency dropdown in create/edit dialog, saves to `invoices.currency`
-- **BankAccounts**: Select dropdown with all 5 currencies (replaced text input)
+**Root cause**: Line 676 filters by `inv.status === statusFilter`, but "late" is a virtual display status — the DB stores "sent" or "overdue". When the user selects "Overdue" filter, invoices with DB status "sent" but past due (displayed as "late") are excluded.
 
-### Financial Statements ✅
-All reports use `formatCurrency(amount, defaultCurrency)`:
-- Balance Sheet, Income Statement, Cash Flow, Performance Analysis, Dashboard Overview
-- Chart of Accounts, Journal Entries, OCR Upload
-- Bank account balances display in account's own currency
+**Fix**: Change the filter logic to use `getDisplayStatus(inv)` instead of `inv.status` when comparing against the status filter. Also map "overdue" filter to match both "overdue" and "late" display statuses.
 
-### Design Decision: Single-Currency Reporting
-- Financial statements report in tenant's default currency only
-- `currency` field on journal_entries/invoices is metadata for the transaction currency
-- Journal line debits/credits are always in the functional (reporting) currency
+**Changes in `Invoices.tsx**`:
 
-### Future Enhancements (out of scope)
-- Multi-currency FX rate table
-- Unrealized gain/loss calculations
-- Currency revaluation entries
-- Currency badge on mixed-currency views
-- Bank → Journal Entry currency validation on CSV import
+- Update filter (line 676): `const matchStatus = statusFilter === "all" || getDisplayStatus(inv) === statusFilter;`  
+- Make sure "Overdue" to also match "late"
 
-## Dual-Mode Accounting (Cash vs Accrual Basis) — IMPLEMENTED
+### Issue 3: Accrual basis — Invoice should recognize Revenue immediately, not Deferred Revenue (Invoices.tsx)
 
-### Overview
-Users can choose between Cash Basis and Accrual Basis accounting. The setting affects how the Income Statement and Cash Flow reports calculate and display data.
+**Root cause**: The current accrual-mode journal entry on invoice creation (lines 455-484) does:
 
-### Database Changes ✅
-- `tenants.accounting_basis` (text, NOT NULL, default 'accrual')
+- DR Accounts Receivable / CR **Deferred Revenue** / CR VAT
 
-### Tenant Context (`useTenant.tsx`) ✅
-- `accountingBasis` exposed from tenant record
+But correct accrual accounting says: revenue is recognized when the invoice is issued, regardless of payment. The entry should be:
 
-### Settings (`DashboardSettings.tsx`) ✅
-- Accounting Method RadioGroup with descriptions for each basis
+- DR Accounts Receivable / CR **Revenue** / CR VAT
 
-### Income Statement (`IncomeStatement.tsx`) ✅
-- **Accrual Mode**: Standard journal entry date filtering, all revenue/expense accounts
-- **Cash Mode**: Only considers journal entries touching cash accounts (1000 descendants), attributes amounts to counter-party revenue/expense accounts, excludes AR (1100) and Deferred Revenue (2200) from display
-- Basis badge displayed in header
+Additionally, the payment recording (lines 570-587) currently does:
 
-### Cash Flow (`CashFlow.tsx`) ✅
-- **Accrual Mode (Indirect Method)**: Starts with Net Income, adjusts for ΔAR and ΔDeferred Revenue, shows reconciliation table
-- **Cash Mode**: Simplified direct cash movements, hides AR/AP adjustment sections and outstanding invoices/bills projections
-- Basis badge displayed in header
-- Metrics cards change based on mode
+- CR Revenue / DR AR (wrong — revenue was already recognized)
 
-### Key Validation Rules
-- Cash Basis P&L never shows AR or Deferred Revenue balances
-- Accrual Basis uses journal entry date for filtering
-- Cash Basis uses cash-account-touching entries only
+It should be:
 
-## Accounting Help Chatbot — IMPLEMENTED
+- DR Bank / CR AR (clearing the receivable)
 
-### Overview
-Floating AI chatbot on all dashboard pages. Reads tenant currency + CoA from database, uses Gemini to provide accounting guidance tailored to the correct standards (TFRS, SOCPA, US GAAP, IFRS).
+**Changes in `Invoices.tsx**`:
 
-### Files
-- `supabase/functions/accounting-help/index.ts` — Edge function with dynamic system prompt
-- `src/components/dashboard/HelpChatbot.tsx` — Floating chat UI with streaming
-- `src/components/dashboard/DashboardLayout.tsx` — Integration point
+1. **handleSave** accrual branch (line 455): Change `deferredRevenueAccount` to the first revenue account, CR Revenue instead of CR Deferred Revenue
+2. **handleRecordPayment** (line 570): Change to DR Bank (the selected account), CR AR — the payment simply clears the receivable, no revenue entry needed
 
-### Features
-- Currency → standard mapping (TRY→TFRS, SAR→SOCPA, USD→US GAAP, EUR/AED→IFRS)
-- Full CoA tree passed as context so model references real account codes
-- Tenant name, fiscal year end, and industry included in system prompt
-- Can recommend adding/editing/deleting CoA items and journal entries
-- SSE streaming with token-by-token rendering
-- Markdown rendering via react-markdown
-- Ephemeral conversation (resets on close)
-- Quick-start suggestion chips
+### Files Modified
+
+- `src/pages/dashboard/CashFlow.tsx` — deduplicate recurring forecasts vs journal entries in first month
+- `src/pages/dashboard/Invoices.tsx` — fix status filter, fix accrual journal entries, fix payment recording
