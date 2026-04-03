@@ -117,10 +117,30 @@ const JournalEntries = () => {
         canDelete={can("journal_entries.delete")}
         onDelete={async (entryId) => {
           try {
+            // Look up the entry description to find linked forecast entries
+            const { data: entryData } = await supabase
+              .from("journal_entries")
+              .select("description")
+              .eq("id", entryId)
+              .eq("tenant_id", tenantId!)
+              .single();
+
             // Delete lines first, then the entry
             await supabase.from("journal_lines").delete().eq("journal_entry_id", entryId).eq("tenant_id", tenantId!);
             const { error } = await supabase.from("journal_entries").delete().eq("id", entryId).eq("tenant_id", tenantId!);
             if (error) throw error;
+
+            // Delete associated forecast entries (linked by description)
+            if (entryData?.description) {
+              await supabase
+                .from("forecast_entries")
+                .delete()
+                .eq("tenant_id", tenantId!)
+                .eq("description", entryData.description)
+                .eq("is_recurring", true);
+              queryClient.invalidateQueries({ queryKey: ["forecast-entries", tenantId] });
+            }
+
             queryClient.invalidateQueries({ queryKey: ["journal-entries", tenantId] });
             queryClient.invalidateQueries({ queryKey: ["journal-line-totals", tenantId] });
             toast({ title: "Entry deleted", description: "Journal entry has been permanently deleted." });
