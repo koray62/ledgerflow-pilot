@@ -396,6 +396,14 @@ const CashFlow = () => {
             const forecastStartMonth = new Date(fd.getFullYear(), fd.getMonth(), 1);
             const currentEvalMonth = new Date(m.start.getFullYear(), m.start.getMonth(), 1);
             if (currentEvalMonth >= forecastStartMonth) {
+              // Skip forecast in its start month if a journal entry already covers it
+              if (currentEvalMonth.getTime() === forecastStartMonth.getTime()) {
+                const alreadyCovered = futureCashJournalLines.some((line) => {
+                  const ed = new Date(line.journal_entries.entry_date);
+                  return ed >= m.start && ed <= m.end && Math.abs(Number(line.debit) + Number(line.credit) - amt) < 0.01;
+                });
+                if (alreadyCovered) return;
+              }
               applyForecast();
             }
           } else {

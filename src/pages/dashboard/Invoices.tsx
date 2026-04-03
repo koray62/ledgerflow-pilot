@@ -453,7 +453,7 @@ const Invoices = () => {
             });
           }
         } else if (accountingBasis === "accrual") {
-          /* Accrual basis default: DR AR (total), CR Deferred Revenue (subtotal), CR VAT (tax) */
+          /* Accrual basis: DR AR (total), CR Revenue (subtotal), CR VAT (tax) */
           journalLines.push({
             journal_entry_id: je.id,
             tenant_id: tenantId,
@@ -462,14 +462,15 @@ const Invoices = () => {
             credit: 0,
             description: `AR for Invoice ${invoiceNumber}`,
           });
-          if (deferredRevenueAccount) {
+          const revenueAcct = revenueAccounts[0];
+          if (revenueAcct) {
             journalLines.push({
               journal_entry_id: je.id,
               tenant_id: tenantId,
-              account_id: deferredRevenueAccount.id,
+              account_id: revenueAcct.id,
               debit: 0,
               credit: subtotal,
-              description: `Deferred Revenue for Invoice ${invoiceNumber}`,
+              description: `Revenue recognised — Invoice ${invoiceNumber}`,
             });
           }
           if (vatAccount && taxAmount > 0) {
@@ -548,8 +549,8 @@ const Invoices = () => {
 
     setSaving(true);
     try {
-      const selectedRevenueAcct = accounts.find((a) => a.id === paymentBankId);
-      if (!selectedRevenueAcct) throw new Error("Selected revenue account not found in chart of accounts");
+      const bankAcct = accounts.find((a) => a.id === paymentBankId);
+      if (!bankAcct) throw new Error("Selected bank account not found in chart of accounts");
 
       const entryNum = `JE-PAY-${inv.invoice_number}`;
       const { data: je, error: jeErr } = await supabase
@@ -567,21 +568,22 @@ const Invoices = () => {
         .single();
       if (jeErr) throw jeErr;
 
+      /* Payment clears the receivable: DR Bank, CR AR */
       await supabase.from("journal_lines").insert([
         {
           journal_entry_id: je.id,
           tenant_id: tenantId,
-          account_id: selectedRevenueAcct.id,
-          debit: 0,
-          credit: Number(inv.total_amount),
-          description: `Revenue recognised — Invoice ${inv.invoice_number}`,
+          account_id: bankAcct.id,
+          debit: Number(inv.total_amount),
+          credit: 0,
+          description: `Cash received — Invoice ${inv.invoice_number}`,
         },
         {
           journal_entry_id: je.id,
           tenant_id: tenantId,
           account_id: arAccount.id,
-          debit: Number(inv.total_amount),
-          credit: 0,
+          debit: 0,
+          credit: Number(inv.total_amount),
           description: `AR cleared — Invoice ${inv.invoice_number}`,
         },
       ]);
@@ -673,7 +675,8 @@ const Invoices = () => {
     const matchSearch =
       inv.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
       (inv.customers as any)?.name?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || inv.status === statusFilter;
+    const ds = getDisplayStatus(inv);
+    const matchStatus = statusFilter === "all" || ds === statusFilter || (statusFilter === "overdue" && ds === "late");
     return matchSearch && matchStatus;
   });
 
