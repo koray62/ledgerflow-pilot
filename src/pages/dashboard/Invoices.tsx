@@ -673,7 +673,8 @@ const Invoices = () => {
     const matchSearch =
       inv.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
       (inv.customers as any)?.name?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || inv.status === statusFilter;
+    const ds = getDisplayStatus(inv);
+    const matchStatus = statusFilter === "all" || ds === statusFilter || (statusFilter === "overdue" && ds === "late");
     return matchSearch && matchStatus;
   });
 
