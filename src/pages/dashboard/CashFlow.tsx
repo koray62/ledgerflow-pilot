@@ -258,6 +258,32 @@ const CashFlow = () => {
     },
   });
 
+  const { data: recurringSeedEntries = [] } = useQuery({
+    queryKey: ["cf-recurring-seeds", tenantId],
+    enabled: !!tenantId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("journal_entries")
+        .select("entry_date, description")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null);
+      return data ?? [];
+    },
+  });
+
+  // Hide orphaned recurring forecasts whose source journal entry has been deleted
+  const visibleForecasts = useMemo(() => {
+    const toKey = (date: string, description: string) => `${date}::${description.trim().toLowerCase()}`;
+    const liveRecurringSeedKeys = new Set(
+      recurringSeedEntries.map((entry) => toKey(entry.entry_date, entry.description))
+    );
+
+    return forecasts.filter((forecast) => {
+      if (!forecast.is_recurring) return true;
+      return liveRecurringSeedKeys.has(toKey(forecast.forecast_date, forecast.description));
+    });
+  }, [forecasts, recurringSeedEntries]);
+
   const now = new Date();
   const currentMonthStr = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
   const { data: futureCashJournalLines = [] } = useQuery({
@@ -383,7 +409,7 @@ const CashFlow = () => {
           });
         }
 
-        forecasts.forEach((f) => {
+        visibleForecasts.forEach((f) => {
           const fd = new Date(f.forecast_date);
           const amt = Math.abs(Number(f.amount) || 0);
           const applyForecast = () => {
@@ -506,7 +532,7 @@ const CashFlow = () => {
         });
       }
 
-      forecasts.forEach((f) => {
+      visibleForecasts.forEach((f) => {
         const fd = new Date(f.forecast_date);
         const amt = Math.abs(Number(f.amount) || 0);
         let applies = false;
@@ -561,7 +587,7 @@ const CashFlow = () => {
     // Sort by date
     items.sort((a, b) => a.date.localeCompare(b.date));
     return items;
-  }, [expandedMonth, chartData, cashJournalLines, futureCashJournalLines, outstandingInvoices, outstandingBills, forecasts, isCashBasis, now]);
+  }, [expandedMonth, chartData, cashJournalLines, futureCashJournalLines, outstandingInvoices, outstandingBills, visibleForecasts, isCashBasis, now]);
 
   const metrics = isCashBasis
     ? [
