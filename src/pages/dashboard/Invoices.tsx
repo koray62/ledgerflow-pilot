@@ -453,7 +453,7 @@ const Invoices = () => {
             });
           }
         } else if (accountingBasis === "accrual") {
-          /* Accrual basis default: DR AR (total), CR Deferred Revenue (subtotal), CR VAT (tax) */
+          /* Accrual basis: DR AR (total), CR Revenue (subtotal), CR VAT (tax) */
           journalLines.push({
             journal_entry_id: je.id,
             tenant_id: tenantId,
@@ -462,14 +462,15 @@ const Invoices = () => {
             credit: 0,
             description: `AR for Invoice ${invoiceNumber}`,
           });
-          if (deferredRevenueAccount) {
+          const revenueAcct = revenueAccounts[0];
+          if (revenueAcct) {
             journalLines.push({
               journal_entry_id: je.id,
               tenant_id: tenantId,
-              account_id: deferredRevenueAccount.id,
+              account_id: revenueAcct.id,
               debit: 0,
               credit: subtotal,
-              description: `Deferred Revenue for Invoice ${invoiceNumber}`,
+              description: `Revenue recognised — Invoice ${invoiceNumber}`,
             });
           }
           if (vatAccount && taxAmount > 0) {
