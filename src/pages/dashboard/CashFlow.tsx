@@ -285,6 +285,13 @@ const CashFlow = () => {
   }, [forecasts, recurringSeedEntries]);
 
   const now = new Date();
+  const parseLocalDate = (value: string) => new Date(value + (value.length === 10 ? "T00:00:00" : ""));
+  const monthStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+  const shouldApplyMonthlyRecurringForecast = (forecastDate: string, targetMonthStart: Date) => {
+    const forecastStartMonth = monthStart(parseLocalDate(forecastDate));
+    const currentEvalMonth = monthStart(targetMonthStart);
+    return currentEvalMonth.getTime() > forecastStartMonth.getTime();
+  };
   const currentMonthStr = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
   const { data: futureCashJournalLines = [] } = useQuery({
     queryKey: ["cf-future-je-lines", tenantId, cashAccountIds, currentMonthStr, endStr],
@@ -410,7 +417,7 @@ const CashFlow = () => {
         }
 
         visibleForecasts.forEach((f) => {
-          const fd = new Date(f.forecast_date);
+          const fd = parseLocalDate(f.forecast_date);
           const amt = Math.abs(Number(f.amount) || 0);
           const applyForecast = () => {
             if (f.category === "expense") outflow += amt;
@@ -418,14 +425,7 @@ const CashFlow = () => {
           };
 
           if (f.is_recurring && f.recurrence_interval === "monthly") {
-            // Apply once per month, only for months at or after the forecast start date
-            const forecastStartMonth = new Date(fd.getFullYear(), fd.getMonth(), 1);
-            const currentEvalMonth = new Date(m.start.getFullYear(), m.start.getMonth(), 1);
-            if (currentEvalMonth >= forecastStartMonth) {
-              // Always skip the start month — the seed journal entry covers it
-              if (currentEvalMonth.getTime() === forecastStartMonth.getTime()) {
-                return;
-              }
+            if (shouldApplyMonthlyRecurringForecast(f.forecast_date, m.start)) {
               applyForecast();
             }
           } else {
@@ -529,13 +529,11 @@ const CashFlow = () => {
       }
 
       visibleForecasts.forEach((f) => {
-        const fd = new Date(f.forecast_date);
+        const fd = parseLocalDate(f.forecast_date);
         const amt = Math.abs(Number(f.amount) || 0);
         let applies = false;
         if (f.is_recurring && f.recurrence_interval === "monthly") {
-          const forecastStartMonth = new Date(fd.getFullYear(), fd.getMonth(), 1);
-          const currentEvalMonth = new Date(mStart.getFullYear(), mStart.getMonth(), 1);
-          applies = currentEvalMonth >= forecastStartMonth;
+          applies = shouldApplyMonthlyRecurringForecast(f.forecast_date, mStart);
         } else {
           applies = fd >= mStart && fd <= mEnd;
         }
