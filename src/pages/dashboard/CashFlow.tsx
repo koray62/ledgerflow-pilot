@@ -355,7 +355,7 @@ const CashFlow = () => {
   // Fetch AP journal entries NOT linked to bills (accrual: these are future outflows)
   const { data: apJournalOutflows = [] } = useQuery({
     queryKey: ["cf-ap-journal-outflows", tenantId, apAccountIds, currentMonthStr, endStr],
-    enabled: !!tenantId && apAccountIds.length > 0 && !isCashBasis,
+    enabled: !!tenantId && apAccountIds.length > 0,
     queryFn: async () => {
       // Get bill-linked journal entry IDs to exclude
       const { data: billJEs } = await supabase
@@ -490,17 +490,15 @@ const CashFlow = () => {
         });
 
         // AP journal entries (not linked to bills/invoices) = future outflows
-        if (!isCashBasis) {
-          apJournalOutflows.forEach((line) => {
-            const entryDate = new Date(line.journal_entries.entry_date);
-            if (entryDate >= m.start && entryDate <= m.end) {
-              const credit = Number(line.credit);
-              const debit = Number(line.debit);
-              // Net new AP (credits > debits = new liability = outflow)
-              if (credit > debit) outflow += credit - debit;
-            }
-          });
-        }
+        // AP journal entries (not linked to bills/invoices) = future outflows
+        apJournalOutflows.forEach((line) => {
+          const entryDate = new Date(line.journal_entries.entry_date);
+          if (entryDate >= m.start && entryDate <= m.end) {
+            const credit = Number(line.credit);
+            const debit = Number(line.debit);
+            if (credit > debit) outflow += credit - debit;
+          }
+        });
       }
 
       running += inflow - outflow;
@@ -639,25 +637,24 @@ const CashFlow = () => {
       });
 
       // AP journal entries (not linked to bills/invoices) = future outflows
-      if (!isCashBasis) {
-        apJournalOutflows.forEach((line) => {
-          const entryDate = new Date(line.journal_entries.entry_date);
-          if (entryDate >= mStart && entryDate <= mEnd) {
-            const credit = Number(line.credit);
-            const debit = Number(line.debit);
-            if (credit > debit) {
-              items.push({
-                date: line.journal_entries.entry_date,
-                description: line.description || line.journal_entries.description,
-                account: line.chart_of_accounts.name,
-                type: "outflow",
-                amount: credit - debit,
-                source: `JE ${line.journal_entries.entry_number}`,
-              });
-            }
+      // AP journal entries (not linked to bills/invoices) = future outflows
+      apJournalOutflows.forEach((line) => {
+        const entryDate = new Date(line.journal_entries.entry_date);
+        if (entryDate >= mStart && entryDate <= mEnd) {
+          const credit = Number(line.credit);
+          const debit = Number(line.debit);
+          if (credit > debit) {
+            items.push({
+              date: line.journal_entries.entry_date,
+              description: line.description || line.journal_entries.description,
+              account: line.chart_of_accounts.name,
+              type: "outflow",
+              amount: credit - debit,
+              source: `JE ${line.journal_entries.entry_number}`,
+            });
           }
-        });
-      }
+        }
+      });
     }
 
     // Sort by date
