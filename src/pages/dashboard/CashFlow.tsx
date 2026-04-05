@@ -355,7 +355,7 @@ const CashFlow = () => {
   // Fetch AP journal entries NOT linked to bills (accrual: these are future outflows)
   const { data: apJournalOutflows = [] } = useQuery({
     queryKey: ["cf-ap-journal-outflows", tenantId, apAccountIds, currentMonthStr, endStr],
-    enabled: !!tenantId && apAccountIds.length > 0 && !isCashBasis,
+    enabled: !!tenantId && apAccountIds.length > 0,
     queryFn: async () => {
       // Get bill-linked journal entry IDs to exclude
       const { data: billJEs } = await supabase
