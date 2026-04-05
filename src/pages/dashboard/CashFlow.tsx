@@ -352,6 +352,54 @@ const CashFlow = () => {
     },
   });
 
+  // Fetch AP journal entries NOT linked to bills (accrual: these are future outflows)
+  const { data: apJournalOutflows = [] } = useQuery({
+    queryKey: ["cf-ap-journal-outflows", tenantId, apAccountIds, currentMonthStr, endStr],
+    enabled: !!tenantId && apAccountIds.length > 0 && !isCashBasis,
+    queryFn: async () => {
+      // Get bill-linked journal entry IDs to exclude
+      const { data: billJEs } = await supabase
+        .from("bills")
+        .select("journal_entry_id")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null)
+        .not("journal_entry_id", "is", null);
+      const billJEIds = new Set((billJEs ?? []).map(b => b.journal_entry_id).filter(Boolean));
+
+      // Get invoice-linked journal entry IDs to exclude
+      const { data: invoiceJEs } = await supabase
+        .from("invoices")
+        .select("journal_entry_id, payment_journal_entry_id")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null);
+      const invoiceJEIds = new Set(
+        (invoiceJEs ?? []).flatMap(i => [i.journal_entry_id, i.payment_journal_entry_id]).filter(Boolean)
+      );
+
+      // Fetch AP lines for current/future months
+      let query = supabase
+        .from("journal_lines")
+        .select("debit, credit, description, account_id, journal_entry_id, journal_entries!inner(entry_date, description, entry_number, status), chart_of_accounts!inner(name)")
+        .eq("tenant_id", tenantId!)
+        .in("account_id", apAccountIds)
+        .is("deleted_at", null)
+        .gte("journal_entries.entry_date", currentMonthStr);
+      if (endStr) query = query.lte("journal_entries.entry_date", endStr);
+      const { data } = await query;
+
+      // Filter out lines linked to bills or invoices, and only include posted/pending entries
+      return ((data ?? []) as Array<{
+        debit: number; credit: number; description: string | null; account_id: string; journal_entry_id: string;
+        journal_entries: { entry_date: string; description: string; entry_number: string; status: string };
+        chart_of_accounts: { name: string };
+      }>).filter(line => 
+        !billJEIds.has(line.journal_entry_id) && 
+        !invoiceJEIds.has(line.journal_entry_id) &&
+        ["posted", "pending", "draft"].includes(line.journal_entries.status)
+      );
+    },
+  });
+
   const netCashPosition = cashBalance - apBalance;
   const runway = monthlyBurn > 0 ? netCashPosition / monthlyBurn : null;
   const showWarning = runway !== null && runway < 6;
@@ -440,6 +488,19 @@ const CashFlow = () => {
             outflow += Number(line.credit);
           }
         });
+
+        // AP journal entries (not linked to bills/invoices) = future outflows
+        if (!isCashBasis) {
+          apJournalOutflows.forEach((line) => {
+            const entryDate = new Date(line.journal_entries.entry_date);
+            if (entryDate >= m.start && entryDate <= m.end) {
+              const credit = Number(line.credit);
+              const debit = Number(line.debit);
+              // Net new AP (credits > debits = new liability = outflow)
+              if (credit > debit) outflow += credit - debit;
+            }
+          });
+        }
       }
 
       running += inflow - outflow;
@@ -576,12 +637,33 @@ const CashFlow = () => {
           }
         }
       });
+
+      // AP journal entries (not linked to bills/invoices) = future outflows
+      if (!isCashBasis) {
+        apJournalOutflows.forEach((line) => {
+          const entryDate = new Date(line.journal_entries.entry_date);
+          if (entryDate >= mStart && entryDate <= mEnd) {
+            const credit = Number(line.credit);
+            const debit = Number(line.debit);
+            if (credit > debit) {
+              items.push({
+                date: line.journal_entries.entry_date,
+                description: line.description || line.journal_entries.description,
+                account: line.chart_of_accounts.name,
+                type: "outflow",
+                amount: credit - debit,
+                source: `JE ${line.journal_entries.entry_number}`,
+              });
+            }
+          }
+        });
+      }
     }
 
     // Sort by date
     items.sort((a, b) => a.date.localeCompare(b.date));
     return items;
-  }, [expandedMonth, chartData, cashJournalLines, futureCashJournalLines, outstandingInvoices, outstandingBills, visibleForecasts, isCashBasis, now]);
+  }, [expandedMonth, chartData, cashJournalLines, futureCashJournalLines, outstandingInvoices, outstandingBills, visibleForecasts, isCashBasis, now, apJournalOutflows]);
 
   const metrics = isCashBasis
     ? [
