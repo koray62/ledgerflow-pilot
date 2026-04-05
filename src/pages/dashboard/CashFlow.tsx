@@ -637,12 +637,33 @@ const CashFlow = () => {
           }
         }
       });
+
+      // AP journal entries (not linked to bills/invoices) = future outflows
+      if (!isCashBasis) {
+        apJournalOutflows.forEach((line) => {
+          const entryDate = new Date(line.journal_entries.entry_date);
+          if (entryDate >= mStart && entryDate <= mEnd) {
+            const credit = Number(line.credit);
+            const debit = Number(line.debit);
+            if (credit > debit) {
+              items.push({
+                date: line.journal_entries.entry_date,
+                description: line.description || line.journal_entries.description,
+                account: line.chart_of_accounts.name,
+                type: "outflow",
+                amount: credit - debit,
+                source: `JE ${line.journal_entries.entry_number}`,
+              });
+            }
+          }
+        });
+      }
     }
 
     // Sort by date
     items.sort((a, b) => a.date.localeCompare(b.date));
     return items;
-  }, [expandedMonth, chartData, cashJournalLines, futureCashJournalLines, outstandingInvoices, outstandingBills, visibleForecasts, isCashBasis, now]);
+  }, [expandedMonth, chartData, cashJournalLines, futureCashJournalLines, outstandingInvoices, outstandingBills, visibleForecasts, isCashBasis, now, apJournalOutflows]);
 
   const metrics = isCashBasis
     ? [
