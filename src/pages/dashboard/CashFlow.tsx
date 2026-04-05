@@ -488,6 +488,19 @@ const CashFlow = () => {
             outflow += Number(line.credit);
           }
         });
+
+        // AP journal entries (not linked to bills/invoices) = future outflows
+        if (!isCashBasis) {
+          apJournalOutflows.forEach((line) => {
+            const entryDate = new Date(line.journal_entries.entry_date);
+            if (entryDate >= m.start && entryDate <= m.end) {
+              const credit = Number(line.credit);
+              const debit = Number(line.debit);
+              // Net new AP (credits > debits = new liability = outflow)
+              if (credit > debit) outflow += credit - debit;
+            }
+          });
+        }
       }
 
       running += inflow - outflow;
