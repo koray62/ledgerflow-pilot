@@ -440,7 +440,7 @@ const CashFlow = () => {
 
       if (isPast) {
         cashJournalLines.forEach((line) => {
-          const entryDate = new Date(line.journal_entries.entry_date);
+          const entryDate = parseLocalDate(line.journal_entries.entry_date);
           if (entryDate >= m.start && entryDate <= m.end) {
             inflow += Number(line.debit);
             outflow += Number(line.credit);
@@ -450,14 +450,14 @@ const CashFlow = () => {
         if (!isCashBasis) {
           // Accrual: project based on AR/AP
           outstandingInvoices.forEach((inv) => {
-            const due = new Date(inv.due_date);
+            const due = parseLocalDate(inv.due_date);
             if (due >= m.start && due <= m.end) {
               inflow += Number(inv.total_amount) - Number(inv.amount_paid);
             }
           });
 
           outstandingBills.forEach((bill) => {
-            const due = new Date(bill.due_date);
+            const due = parseLocalDate(bill.due_date);
             if (due >= m.start && due <= m.end) {
               outflow += Number(bill.total_amount) - Number(bill.amount_paid);
             }
@@ -482,7 +482,7 @@ const CashFlow = () => {
         });
 
         futureCashJournalLines.forEach((line) => {
-          const entryDate = new Date(line.journal_entries.entry_date);
+          const entryDate = parseLocalDate(line.journal_entries.entry_date);
           if (entryDate >= m.start && entryDate <= m.end) {
             inflow += Number(line.debit);
             outflow += Number(line.credit);
@@ -492,7 +492,7 @@ const CashFlow = () => {
         // AP journal entries (not linked to bills/invoices) = future outflows
         // AP journal entries (not linked to bills/invoices) = future outflows
         apJournalOutflows.forEach((line) => {
-          const entryDate = new Date(line.journal_entries.entry_date);
+          const entryDate = parseLocalDate(line.journal_entries.entry_date);
           if (entryDate >= m.start && entryDate <= m.end) {
             const credit = Number(line.credit);
             const debit = Number(line.debit);
@@ -523,7 +523,7 @@ const CashFlow = () => {
     if (isPast) {
       // Historical: show actual cash journal lines
       cashJournalLines.forEach((line) => {
-        const entryDate = new Date(line.journal_entries.entry_date);
+        const entryDate = parseLocalDate(line.journal_entries.entry_date);
         if (entryDate >= mStart && entryDate <= mEnd) {
           const debit = Number(line.debit);
           const credit = Number(line.credit);
@@ -553,7 +553,7 @@ const CashFlow = () => {
       // Future: show projected items
       if (!isCashBasis) {
         outstandingInvoices.forEach((inv) => {
-          const due = new Date(inv.due_date);
+          const due = parseLocalDate(inv.due_date);
           if (due >= mStart && due <= mEnd) {
             const outstanding = Number(inv.total_amount) - Number(inv.amount_paid);
             if (outstanding > 0) {
@@ -570,7 +570,7 @@ const CashFlow = () => {
         });
 
         outstandingBills.forEach((bill) => {
-          const due = new Date(bill.due_date);
+          const due = parseLocalDate(bill.due_date);
           if (due >= mStart && due <= mEnd) {
             const outstanding = Number(bill.total_amount) - Number(bill.amount_paid);
             if (outstanding > 0) {
@@ -609,7 +609,7 @@ const CashFlow = () => {
       });
 
       futureCashJournalLines.forEach((line) => {
-        const entryDate = new Date(line.journal_entries.entry_date);
+        const entryDate = parseLocalDate(line.journal_entries.entry_date);
         if (entryDate >= mStart && entryDate <= mEnd) {
           const debit = Number(line.debit);
           const credit = Number(line.credit);
@@ -639,7 +639,7 @@ const CashFlow = () => {
       // AP journal entries (not linked to bills/invoices) = future outflows
       // AP journal entries (not linked to bills/invoices) = future outflows
       apJournalOutflows.forEach((line) => {
-        const entryDate = new Date(line.journal_entries.entry_date);
+        const entryDate = parseLocalDate(line.journal_entries.entry_date);
         if (entryDate >= mStart && entryDate <= mEnd) {
           const credit = Number(line.credit);
           const debit = Number(line.debit);
