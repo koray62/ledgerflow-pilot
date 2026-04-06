@@ -138,6 +138,24 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId, onCreateNew, onDele
           setDescription(entryRes.data.description);
           setMemo(entryRes.data.memo || "");
           setCurrency((entryRes.data as any).currency || defaultCurrency);
+
+          // Check if there's a linked recurring forecast entry
+          const { data: forecastData } = await supabase
+            .from("forecast_entries")
+            .select("is_recurring, recurrence_interval")
+            .eq("tenant_id", tenantId)
+            .eq("description", entryRes.data.description)
+            .eq("is_recurring", true)
+            .is("deleted_at", null)
+            .limit(1);
+
+          if (forecastData && forecastData.length > 0) {
+            setIsRecurring(true);
+            setRecurrenceInterval(forecastData[0].recurrence_interval || "monthly");
+          } else {
+            setIsRecurring(false);
+            setRecurrenceInterval("monthly");
+          }
         }
 
         if (linesRes.data && linesRes.data.length > 0) {
