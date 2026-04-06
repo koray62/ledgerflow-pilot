@@ -291,6 +291,34 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId, onCreateNew, onDele
 
         if (linesErr) throw linesErr;
 
+        // Update recurring forecast entry
+        // First delete any existing forecast linked by old description
+        await supabase
+          .from("forecast_entries")
+          .delete()
+          .eq("tenant_id", tenantId)
+          .eq("is_recurring", true)
+          .eq("description", description.trim());
+
+        if (isRecurring) {
+          const totalDebit = lineRows.reduce((s, l) => s + Number(l.debit || 0), 0);
+          const totalCredit = lineRows.reduce((s, l) => s + Number(l.credit || 0), 0);
+          const forecastAmount = totalDebit >= totalCredit ? totalDebit : totalCredit;
+          const forecastCategory = totalDebit >= totalCredit ? "expense" : "revenue";
+
+          await supabase.from("forecast_entries").insert({
+            tenant_id: tenantId,
+            forecast_date: entryDate,
+            description: description.trim(),
+            amount: forecastAmount,
+            category: forecastCategory,
+            is_recurring: true,
+            recurrence_interval: recurrenceInterval,
+            created_by: user.id,
+          });
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["forecast-entries", tenantId] });
         queryClient.invalidateQueries({ queryKey: ["journal-entries", tenantId] });
         queryClient.invalidateQueries({ queryKey: ["journal-line-totals", tenantId] });
 
