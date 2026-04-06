@@ -275,7 +275,7 @@ export default function HelpChatbot() {
     } finally {
       setIsStreaming(false);
     }
-  }, [input, isStreaming, messages, defaultCurrency, chartOfAccounts, tenantName, tenantMeta]);
+  }, [input, isStreaming, messages, defaultCurrency, chartOfAccounts, tenantName, tenantMeta, journalContext, invoiceContext, billContext, bankContext]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
