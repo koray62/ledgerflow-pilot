@@ -22,17 +22,123 @@ function getAccountingStandard(currency: string): { standard: string; descriptio
   }
 }
 
+interface JournalLine {
+  account: string;
+  debit: number;
+  credit: number;
+  description: string | null;
+}
+
+interface JournalEntry {
+  entry_number: string;
+  date: string;
+  description: string;
+  status: string;
+  memo: string | null;
+  lines: JournalLine[];
+}
+
+interface Invoice {
+  invoice_number: string;
+  invoice_date: string;
+  due_date: string;
+  total_amount: number;
+  amount_paid: number;
+  status: string;
+  currency: string;
+  notes: string | null;
+}
+
+interface Bill {
+  bill_number: string;
+  bill_date: string;
+  due_date: string;
+  total_amount: number;
+  amount_paid: number;
+  status: string;
+  notes: string | null;
+}
+
+interface BankAccount {
+  name: string;
+  institution: string | null;
+  currency: string;
+  current_balance: number;
+  account_type: string | null;
+  is_active: boolean;
+}
+
+function buildFinancialDataSection(
+  currency: string,
+  journalEntries: JournalEntry[],
+  invoices: Invoice[],
+  bills: Bill[],
+  bankAccounts: BankAccount[]
+): string {
+  let sections = "";
+
+  if (journalEntries.length > 0) {
+    const jeTable = journalEntries.map((je) => {
+      const linesStr = je.lines
+        .map((l) => `    ${l.account} | Dr ${l.debit} | Cr ${l.credit}${l.description ? ` | ${l.description}` : ""}`)
+        .join("\n");
+      return `  ${je.entry_number} | ${je.date} | ${je.description} | Status: ${je.status}${je.memo ? ` | Memo: ${je.memo}` : ""}\n${linesStr}`;
+    }).join("\n\n");
+
+    sections += `\n\n## Journal Entries (Recent ${journalEntries.length} records)
+Use these records to answer questions about specific transactions, balances, and accounting history. The user may refer to entries by their entry number (e.g., JE-XXXX).
+
+${jeTable}`;
+  }
+
+  if (invoices.length > 0) {
+    const invTable = invoices.map((inv) =>
+      `  ${inv.invoice_number} | ${inv.invoice_date} | Due: ${inv.due_date} | Total: ${inv.total_amount} ${inv.currency} | Paid: ${inv.amount_paid} | Status: ${inv.status}${inv.notes ? ` | ${inv.notes}` : ""}`
+    ).join("\n");
+
+    sections += `\n\n## Invoices (Recent ${invoices.length} records)
+${invTable}`;
+  }
+
+  if (bills.length > 0) {
+    const billTable = bills.map((b) =>
+      `  ${b.bill_number} | ${b.bill_date} | Due: ${b.due_date} | Total: ${b.total_amount} ${currency} | Paid: ${b.amount_paid} | Status: ${b.status}${b.notes ? ` | ${b.notes}` : ""}`
+    ).join("\n");
+
+    sections += `\n\n## Bills (Recent ${bills.length} records)
+${billTable}`;
+  }
+
+  if (bankAccounts.length > 0) {
+    const bankTable = bankAccounts.map((ba) =>
+      `  ${ba.name} | ${ba.institution || "N/A"} | ${ba.currency} | Balance: ${ba.current_balance} | Type: ${ba.account_type || "N/A"} | Active: ${ba.is_active}`
+    ).join("\n");
+
+    sections += `\n\n## Bank Accounts
+${bankTable}`;
+  }
+
+  return sections;
+}
+
 function buildSystemPrompt(
   currency: string,
   chartOfAccounts: Array<{ code: string; name: string; type: string; parentCode?: string }>,
   tenantName?: string,
   fiscalYearEnd?: number,
-  industry?: string
+  industry?: string,
+  accountingBasis?: string,
+  journalEntries: JournalEntry[] = [],
+  invoices: Invoice[] = [],
+  bills: Bill[] = [],
+  bankAccounts: BankAccount[] = []
 ): string {
   const { standard, description } = getAccountingStandard(currency);
   const coaTable = chartOfAccounts
     .map((a) => `${a.code} | ${a.name} | ${a.type}${a.parentCode ? ` | Parent: ${a.parentCode}` : ""}`)
     .join("\n");
+
+  const financialData = buildFinancialDataSection(currency, journalEntries, invoices, bills, bankAccounts);
 
   return `## Role & Identity
 You are a senior accounting specialist with deep expertise in ${standard} (${description}).
@@ -43,6 +149,7 @@ You always reason step-by-step before producing output, and you never guess — 
 - **Company Name:** ${tenantName || "N/A"}
 - **Functional Currency:** ${currency}
 - **Accounting Standard:** ${standard}
+- **Accounting Basis:** ${accountingBasis === "cash" ? "Cash Basis" : "Accrual Basis"}
 - **Fiscal Year End:** Month ${fiscalYearEnd || 12}
 - **Industry:** ${industry || "N/A"}
 
@@ -51,6 +158,7 @@ The company currently uses the following accounts. Always reference these exact 
 
 Code | Name | Type | Parent
 ${coaTable}
+${financialData}
 
 ## What You Can Do
 
@@ -61,16 +169,22 @@ ${coaTable}
 - Include: date, reference number (if provided), narration, and applicable tax lines.
 - Flag entries that may trigger tax obligations (e.g., VAT, withholding tax).
 
-### 2. Chart of Accounts Management
+### 2. Data Lookup & Analysis
+- When the user asks about a specific journal entry, invoice, bill, or bank account, look up the data from the records provided above.
+- You can answer questions like "What does JE-XXXX contain?", "What invoices are overdue?", "What is the balance of account X?".
+- Calculate totals, balances, or summaries from the provided records when asked.
+- If a record is not found in the data provided, let the user know it may be outside the recent records window.
+
+### 3. Chart of Accounts Management
 - Recommend **adding** new accounts when no suitable account exists, following the company's existing numbering convention.
 - Recommend **editing** (renaming or reclassifying) accounts that are misnamed or miscategorized under ${standard}.
 - Recommend **archiving or deleting** accounts that are duplicated or unused, with a warning if they have a non-zero balance or prior activity.
 
-### 3. Compliance Checks
+### 4. Compliance Checks
 - Flag journal entries or account structures that conflict with ${standard} requirements.
 - Highlight if a transaction requires a specific disclosure, note, or supporting document.
 
-### 4. Explanations
+### 5. Explanations
 - Explain the accounting rationale behind any suggested entry in plain language.
 - Cite the relevant standard when applicable.
 
@@ -102,6 +216,7 @@ Always present journal entries in this exact format:
 4. **Never post intercompany entries** without flagging that elimination entries may be required.
 5. **If uncertain, ask** — do not fabricate figures, rates, or account mappings.
 6. **Always apply ${standard} rules**, not a different standard, unless the user explicitly requests a comparison.
+7. **When referencing financial data, always cite the specific entry number, invoice number, or bill number** so the user can verify.
 
 ## Clarifying Questions to Ask When Needed
 - "Is this transaction with a related party or third party?"
@@ -117,7 +232,19 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, currency, chartOfAccounts, tenantName, fiscalYearEnd, industry } = await req.json();
+    const {
+      messages,
+      currency,
+      chartOfAccounts,
+      tenantName,
+      fiscalYearEnd,
+      industry,
+      accountingBasis,
+      journalEntries,
+      invoices,
+      bills,
+      bankAccounts,
+    } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -129,7 +256,12 @@ serve(async (req) => {
       chartOfAccounts || [],
       tenantName,
       fiscalYearEnd,
-      industry
+      industry,
+      accountingBasis,
+      journalEntries || [],
+      invoices || [],
+      bills || [],
+      bankAccounts || []
     );
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
