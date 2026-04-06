@@ -206,6 +206,11 @@ export default function HelpChatbot() {
           tenantName: tenantName,
           fiscalYearEnd: tenantMeta?.fiscal_year_end,
           industry: tenantMeta?.industry,
+          accountingBasis: tenantMeta?.accounting_basis,
+          journalEntries: journalContext ?? [],
+          invoices: invoiceContext ?? [],
+          bills: billContext ?? [],
+          bankAccounts: bankContext ?? [],
         }),
       });
 
