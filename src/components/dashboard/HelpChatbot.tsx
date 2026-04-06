@@ -54,10 +54,107 @@ export default function HelpChatbot() {
     queryFn: async () => {
       const { data } = await supabase
         .from("tenants")
-        .select("fiscal_year_end, industry")
+        .select("fiscal_year_end, industry, accounting_basis")
         .eq("id", tenantId!)
         .maybeSingle();
       return data;
+    },
+  });
+
+  // Fetch recent journal entries with lines for context
+  const { data: journalContext } = useQuery({
+    queryKey: ["chatbot-journal-context", tenantId],
+    enabled: !!tenantId && open,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
+      const { data: entries } = await supabase
+        .from("journal_entries")
+        .select("id, entry_number, entry_date, description, status, currency, memo")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null)
+        .order("entry_date", { ascending: false })
+        .limit(50);
+      if (!entries || entries.length === 0) return [];
+
+      const { data: lines } = await supabase
+        .from("journal_lines")
+        .select("journal_entry_id, account_id, debit, credit, description")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null)
+        .in("journal_entry_id", entries.map(e => e.id));
+
+      // Map account IDs to codes/names from CoA
+      const { data: accounts } = await supabase
+        .from("chart_of_accounts")
+        .select("id, code, name")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null);
+      const acctMap = new Map(accounts?.map(a => [a.id, `${a.code} ${a.name}`]) ?? []);
+
+      return entries.map(e => ({
+        entry_number: e.entry_number,
+        date: e.entry_date,
+        description: e.description,
+        status: e.status,
+        memo: e.memo,
+        lines: (lines ?? [])
+          .filter(l => l.journal_entry_id === e.id)
+          .map(l => ({
+            account: acctMap.get(l.account_id) || l.account_id,
+            debit: Number(l.debit),
+            credit: Number(l.credit),
+            description: l.description,
+          })),
+      }));
+    },
+  });
+
+  // Fetch invoices for context
+  const { data: invoiceContext } = useQuery({
+    queryKey: ["chatbot-invoice-context", tenantId],
+    enabled: !!tenantId && open,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("invoices")
+        .select("invoice_number, invoice_date, due_date, total_amount, amount_paid, status, currency, notes")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null)
+        .order("invoice_date", { ascending: false })
+        .limit(30);
+      return data ?? [];
+    },
+  });
+
+  // Fetch bills for context
+  const { data: billContext } = useQuery({
+    queryKey: ["chatbot-bill-context", tenantId],
+    enabled: !!tenantId && open,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("bills")
+        .select("bill_number, bill_date, due_date, total_amount, amount_paid, status, notes")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null)
+        .order("bill_date", { ascending: false })
+        .limit(30);
+      return data ?? [];
+    },
+  });
+
+  // Fetch bank accounts for context
+  const { data: bankContext } = useQuery({
+    queryKey: ["chatbot-bank-context", tenantId],
+    enabled: !!tenantId && open,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("bank_accounts")
+        .select("name, institution, currency, current_balance, account_type, is_active")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null);
+      return data ?? [];
     },
   });
 
