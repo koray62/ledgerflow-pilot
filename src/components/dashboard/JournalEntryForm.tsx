@@ -552,8 +552,8 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId, onCreateNew, onDele
               />
             </div>
 
-            {/* Recurring toggle - only for new entries */}
-            {!isEditMode && (
+            {/* Recurring toggle */}
+            {(
               <div className="rounded-lg border border-border p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
