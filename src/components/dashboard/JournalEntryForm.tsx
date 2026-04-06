@@ -138,6 +138,24 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId, onCreateNew, onDele
           setDescription(entryRes.data.description);
           setMemo(entryRes.data.memo || "");
           setCurrency((entryRes.data as any).currency || defaultCurrency);
+
+          // Check if there's a linked recurring forecast entry
+          const { data: forecastData } = await supabase
+            .from("forecast_entries")
+            .select("is_recurring, recurrence_interval")
+            .eq("tenant_id", tenantId)
+            .eq("description", entryRes.data.description)
+            .eq("is_recurring", true)
+            .is("deleted_at", null)
+            .limit(1);
+
+          if (forecastData && forecastData.length > 0) {
+            setIsRecurring(true);
+            setRecurrenceInterval(forecastData[0].recurrence_interval || "monthly");
+          } else {
+            setIsRecurring(false);
+            setRecurrenceInterval("monthly");
+          }
         }
 
         if (linesRes.data && linesRes.data.length > 0) {
@@ -273,6 +291,34 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId, onCreateNew, onDele
 
         if (linesErr) throw linesErr;
 
+        // Update recurring forecast entry
+        // First delete any existing forecast linked by old description
+        await supabase
+          .from("forecast_entries")
+          .delete()
+          .eq("tenant_id", tenantId)
+          .eq("is_recurring", true)
+          .eq("description", description.trim());
+
+        if (isRecurring) {
+          const totalDebit = lineRows.reduce((s, l) => s + Number(l.debit || 0), 0);
+          const totalCredit = lineRows.reduce((s, l) => s + Number(l.credit || 0), 0);
+          const forecastAmount = totalDebit >= totalCredit ? totalDebit : totalCredit;
+          const forecastCategory = totalDebit >= totalCredit ? "expense" : "revenue";
+
+          await supabase.from("forecast_entries").insert({
+            tenant_id: tenantId,
+            forecast_date: entryDate,
+            description: description.trim(),
+            amount: forecastAmount,
+            category: forecastCategory,
+            is_recurring: true,
+            recurrence_interval: recurrenceInterval,
+            created_by: user.id,
+          });
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["forecast-entries", tenantId] });
         queryClient.invalidateQueries({ queryKey: ["journal-entries", tenantId] });
         queryClient.invalidateQueries({ queryKey: ["journal-line-totals", tenantId] });
 
@@ -552,8 +598,8 @@ const JournalEntryForm = ({ open, onOpenChange, editEntryId, onCreateNew, onDele
               />
             </div>
 
-            {/* Recurring toggle - only for new entries */}
-            {!isEditMode && (
+            {/* Recurring toggle */}
+            {(
               <div className="rounded-lg border border-border p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
