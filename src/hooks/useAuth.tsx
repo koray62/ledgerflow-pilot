@@ -6,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, firstName: string, lastName: string, companyName: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, firstName: string, lastName: string, companyName: string, currency?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, firstName: string, lastName: string, companyName: string) => {
+  const signUp = useCallback(async (email: string, password: string, firstName: string, lastName: string, companyName: string, currency: string = "USD") => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -45,10 +45,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
       if (error) return { error };
 
-      // Create tenant after signup (auto-confirmed, so user is immediately available)
       if (data.user) {
         const { error: tenantError } = await supabase.functions.invoke("create-tenant", {
-          body: { companyName, userId: data.user.id },
+          body: { companyName, userId: data.user.id, currency },
         });
         if (tenantError) console.error("Tenant creation error:", tenantError);
       }

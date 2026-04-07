@@ -5,13 +5,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+
+const currencyOptions = [
+  { value: "USD", label: "🇺🇸 USD — US Dollar (US GAAP)" },
+  { value: "EUR", label: "🇪🇺 EUR — Euro (IFRS)" },
+  { value: "TRY", label: "🇹🇷 TRY — Turkish Lira (TFRS/MSUGT)" },
+  { value: "SAR", label: "🇸🇦 SAR — Saudi Riyal (SOCPA)" },
+  { value: "AED", label: "🇦🇪 AED — UAE Dirham (IFRS)" },
+];
 
 const Signup = () => {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [currency, setCurrency] = useState("USD");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -29,7 +39,7 @@ const Signup = () => {
     }
 
     setLoading(true);
-    const { error } = await signUp(email.trim(), password, firstName.trim(), lastName.trim(), companyName.trim());
+    const { error } = await signUp(email.trim(), password, firstName.trim(), lastName.trim(), companyName.trim(), currency);
     setLoading(false);
 
     if (error) {
@@ -69,6 +79,21 @@ const Signup = () => {
               <div>
                 <Label htmlFor="company" className="text-xs">Company Name</Label>
                 <Input id="company" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Acme Inc." className="mt-1" required />
+              </div>
+              <div>
+                <Label htmlFor="currency" className="text-xs">Country / Currency</Label>
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select currency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currencyOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="email" className="text-xs">Work Email</Label>
